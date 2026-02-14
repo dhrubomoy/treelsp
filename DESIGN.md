@@ -13,6 +13,16 @@ treelsp is a Langium-style LSP generator that uses Tree-sitter as its parsing ba
 - Langium's developer experience (grammar-first, generates a full LSP)
 - TypeScript throughout — no new DSLs to learn
 
+**Incremental parsing**
+- v1 strategy: keystroke → Tree-sitter incremental reparse → full AST rebuild → full scope rebuild
+- Tree-sitter's CST reparse is incremental automatically — no work needed
+- AST and scope are full recompute on every change — simple and correct
+- Internal `DocumentState.update()` method owns all three steps behind a clean boundary
+- This boundary is intentionally designed so v2 can swap in incremental AST + scope
+  without any breaking changes to the public API
+- Invalidation-based incremental (using tree.getChangedRanges()) is the v2 target
+- Full persistent data structures (rust-analyzer style) explicitly out of scope
+
 ---
 
 ## Repository Structure
@@ -782,3 +792,107 @@ Build in this order — each step is testable before the next:
 - vscode-languageserver: https://github.com/microsoft/vscode-languageserver-node
 - LSP specification: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 - Langium (prior art): https://langium.org
+
+
+## Decisions & Open Questions
+
+This section tells Claude Code what is settled and what still needs discussion.
+**Never make a call on an open question without asking the user first.**
+
+---
+
+### Settled — Do Not Revisit
+
+**Project shape**
+- Monorepo with 4 packages: `treelsp`, `@treelsp/cli`, `@treelsp/vscode`, `examples`
+- pnpm workspaces
+- tsdown for building (tsup is unmaintained)
+- TypeScript strict mode + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess`
+- Vitest for testing, ESLint 9 for linting
+- Target: Node.js + Browser (WASM via web-tree-sitter)
+
+**Grammar layer**
+- Rule builder function style: each rule is `r => r.seq(...)` not a plain object
+- Builder method names match Tree-sitter exactly: `seq`, `choice`, `optional`, `repeat`, `repeat1`, `field`, `prec`, `prec.left`, `prec.right`, `prec.dynamic`, `token`, `alias`
+- `r.rule('name')` instead of `$.name` — same concept, type-safe, no Proxy needed
+- No custom DSL — TypeScript is the grammar format
+- `word` and `conflicts` are top-level keys in `defineLanguage`, not inside `grammar`
+- Left recursion is handled natively by Tree-sitter's GLR parser — no special abstraction needed
+- Tree-sitter's precedence model is exposed directly — no `r.binary()` helper abstraction
+
+**Semantic layer**
+- Three concepts: declarations, references, scopes
+- Scope kinds: `global`, `lexical`, `isolated`
+- Declaration scope targets: `local`, `enclosing`, `global`
+- `onUnresolved` policy per reference: `error` | `warning` | `ignore`
+- Visibility / export supported in v1 via `visibility` field on declares
+- Cross-file resolution supported in v1 via `ctx.resolveModule()`
+- A single rule can both declare and reference (Python-style implicit declaration)
+- Declaration ordering controlled by `order`: `after-references` | `before-references`
+- Declaration strategy controlled by `strategy`: `if-not-declared` | `always`
+- Escape hatch: `resolve()` function on both declares and references
+
+**Validation layer**
+- Validators are plain functions — no classes, no registry, no DI
+- Each rule accepts a single function or an array of functions
+- `mergeValidation(...maps)` merges validator maps from multiple files
+- `$document` and `$workspace` special keys for document/workspace-level validators
+- Langium-style `property` + `index` targeting on diagnostics
+- Execution order: parse → scope resolution → built-in checks → node validators → $document → $workspace
+
+**LSP layer**
+- Hover returns a markdown string — runtime wraps it in LSP Hover response
+- Hover on a reference node automatically resolves to its declaration — no user code needed
+- Scope-based completions are automatic from `completionKind` annotations
+- Keyword completions are automatic from grammar + `$keywords`
+- Custom `complete()` functions are additive by default — set `replace: true` to suppress defaults
+- `signature` on a declaration node — triggering logic is automatic if `call` is annotated in semantic
+- Go-to-definition, find references, rename are fully automatic from semantic layer
+- `$unresolved` special key for customising unresolved reference hover message
+
+**Defaults system**
+- Three levels: zero config → configure → override
+- `defaults` object exported from `treelsp` — all entries are plain callable functions
+- Calling `defaults.lsp.hover(node, ctx)` from inside your own hover gives you the generic output to extend
+
+- Incremental parsing: Tree-sitter handles CST incrementally; AST + scope is full recompute in v1,
+  designed for incremental upgrade in v2 without API changes
+
+---
+
+### Open Questions — Ask Before Implementing
+
+**Grammar layer**
+- Should `r.token()` accept both a regex and a rule reference, or regex only?
+  Current assumption: regex only for terminals, `r.rule()` for rule references
+- How should extras (whitespace, comments) be declared?
+  Tree-sitter uses an `extras` array at the grammar level — not yet designed
+
+**Semantic layer**
+- Multi-field / qualified names (e.g. `Foo.Bar`) — punted to v2, but what does the v1 API need to avoid closing that door?
+- Declaration merging (TypeScript interface merging) — punted to v2, same question
+- Should `ctx.typeOf()` exist in v1 at all, or is it purely a v2 concern?
+  Currently referenced in LSP and validation contexts but not defined
+
+**Codegen**
+- Should `generated/` be committed to the repo or gitignored?
+  Recommendation: gitignored, always regenerated — but not decided
+- Should `grammar.wasm` be committed?
+  Leaning yes (it's a build artifact users need, like a lock file) — but not decided
+- What happens when `treelsp generate` is run and `grammar.js` already exists with manual edits?
+  Overwrite silently? Warn? Require `--force`? Not decided
+
+**Runtime**
+- How should parse errors from Tree-sitter surface as LSP diagnostics?
+  Tree-sitter uses ERROR nodes and MISSING nodes — mapping strategy not yet designed
+- Should the runtime support multiple language grammars in one LSP server (e.g. embedded languages)?
+  Not designed — Tree-sitter supports this natively but it's complex
+
+**Testing**
+- What does a unit test for a grammar rule look like?
+  Tree-sitter has a corpus test format — should treelsp expose this or wrap it?
+- Should there be snapshot tests for generated `grammar.js` output?
+
+**VS Code extension**
+- Should `@treelsp/vscode` be a generic extension that any treelsp language can plug into,
+  or a scaffold users copy and customise? Not decided
