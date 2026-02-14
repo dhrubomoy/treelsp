@@ -26,8 +26,8 @@ export async function generate(options: { watch?: boolean }) {
 
     // 2. Dynamically import the language definition
     const grammarUrl = pathToFileURL(grammarPath).href;
-    const module = await import(grammarUrl);
-    const definition = module.default as LanguageDefinition<string>;
+    const module = await import(grammarUrl) as { default: LanguageDefinition<string> };
+    const definition = module.default;
 
     if (!definition || !definition.name || !definition.grammar) {
       spinner.fail('Invalid language definition');

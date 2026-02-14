@@ -6,14 +6,15 @@
 import * as vscode from 'vscode';
 import {
   LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind,
+  // TODO: These will be used when implementing language server launch
+  // LanguageClientOptions,
+  // ServerOptions,
+  // TransportKind,
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(_context: vscode.ExtensionContext) {
   // TODO: Discover and launch treelsp language servers
   // This is a generic extension that can work with any treelsp-generated server
 

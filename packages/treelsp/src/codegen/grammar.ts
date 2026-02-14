@@ -204,11 +204,12 @@ function serializeNode(node: RuleNode, indent = 0): string {
     case 'prec.dynamic':
       return `prec.dynamic(${node.level}, ${serializeNode(node.rule, indent)})`;
 
-    case 'token':
+    case 'token': {
       const pattern = typeof node.pattern === 'string'
         ? JSON.stringify(node.pattern)
         : node.pattern.toString();
       return `token(${pattern})`;
+    }
 
     case 'token.immediate':
       return `token.immediate(${serializeNode(node.rule, indent)})`;
@@ -219,10 +220,11 @@ function serializeNode(node: RuleNode, indent = 0): string {
     case 'rule':
       return `$.${node.name}`;
 
-    default:
+    default: {
       // Type narrowing - this should never happen
       const _exhaustive: never = node;
-      throw new Error(`Unknown node type: ${(_exhaustive as any).type}`);
+      throw new Error(`Unknown node type: ${(_exhaustive as RuleNode).type}`);
+    }
   }
 }
 

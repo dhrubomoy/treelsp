@@ -74,19 +74,24 @@ export type ValidationDefinition<T extends string = string> = {
 export function mergeValidation<T extends string = string>(
   ...definitions: ValidationDefinition<T>[]
 ): ValidationDefinition<T> {
-  const result: any = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result: Record<string, any> = {};
 
   for (const def of definitions) {
     for (const [key, value] of Object.entries(def)) {
-      if (!result[key]) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const existing = result[key];
+      if (!existing) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         result[key] = value;
       } else {
-        const existing = Array.isArray(result[key]) ? result[key] : [result[key]];
-        const incoming = Array.isArray(value) ? value : [value];
-        result[key] = [...existing, ...incoming];
+        const existingArr = Array.isArray(existing) ? existing : [existing];
+        const incomingArr = Array.isArray(value) ? value : [value];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        result[key] = [...existingArr, ...incomingArr];
       }
     }
   }
 
-  return result;
+  return result as ValidationDefinition<T>;
 }

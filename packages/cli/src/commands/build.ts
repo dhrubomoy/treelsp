@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import ora from 'ora';
 import pc from 'picocolors';
 
-export async function build() {
+export function build() {
   const spinner = ora('Checking prerequisites...').start();
 
   try {
@@ -54,8 +54,10 @@ export async function build() {
     spinner.fail('Build failed');
 
     if (error instanceof Error) {
-      if ('stderr' in error && error.stderr) {
-        const stderr = (error as any).stderr.toString();
+      // execSync throws with stderr in the error object
+      const execError = error as Error & { stderr?: Buffer };
+      if (execError.stderr) {
+        const stderr = execError.stderr.toString();
         console.error(pc.red('\nTree-sitter error:'));
         console.error(pc.dim(stderr));
 

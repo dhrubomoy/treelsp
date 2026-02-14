@@ -31,7 +31,7 @@ export async function init() {
         return true;
       },
     },
-  ]);
+  ]) as { name?: string; extension?: string };
 
   // Handle user cancellation (Ctrl+C)
   if (!answers.name || !answers.extension) {
@@ -39,14 +39,16 @@ export async function init() {
     process.exit(0);
   }
 
+  const { name, extension } = answers as { name: string; extension: string };
+
   const spinner = ora('Creating project structure...').start();
 
   try {
-    const projectDir = resolve(process.cwd(), answers.name);
+    const projectDir = resolve(process.cwd(), name);
 
     // Check if directory already exists
     if (existsSync(projectDir)) {
-      spinner.fail(`Directory "${answers.name}" already exists`);
+      spinner.fail(`Directory "${name}" already exists`);
       console.log(pc.dim('\nChoose a different name or remove the existing directory'));
       process.exit(1);
     }
@@ -56,7 +58,7 @@ export async function init() {
 
     // Generate package.json
     const packageJson = {
-      name: answers.name,
+      name: name,
       version: '0.1.0',
       type: 'module',
       dependencies: {
@@ -95,7 +97,7 @@ export async function init() {
     );
 
     // Generate grammar.ts template
-    const capitalizedName = answers.name
+    const capitalizedName = name
       .split('-')
       .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
       .join('');
@@ -108,7 +110,7 @@ import { defineLanguage } from 'treelsp';
 
 export default defineLanguage({
   name: '${capitalizedName}',
-  fileExtensions: ['${answers.extension}'],
+  fileExtensions: ['${extension}'],
   entry: 'program',
   word: 'identifier',
 
@@ -270,7 +272,7 @@ MIT
     spinner.succeed('Project created!');
 
     console.log(pc.dim('\nNext steps:'));
-    console.log(pc.dim(`  cd ${answers.name}`));
+    console.log(pc.dim(`  cd ${name}`));
     console.log(pc.dim('  npm install'));
     console.log(pc.dim('  Edit grammar.ts to define your language'));
     console.log(pc.dim('  npm run generate'));

@@ -36,6 +36,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "package": "vsce package",
+    "lint": "eslint src",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {

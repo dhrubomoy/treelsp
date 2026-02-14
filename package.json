@@ -12,11 +12,11 @@
     "clean": "pnpm -r clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "@eslint/js": "^9.18.0",
+    "@eslint/js": "^9.39.2",
     "@types/node": "^22.10.5",
-    "eslint": "^9.18.0",
+    "eslint": "^9.39.2",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.21.0",
+    "typescript-eslint": "^8.55.0",
     "vitest": "^2.1.8"
   }
 }

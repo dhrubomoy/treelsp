@@ -29,27 +29,29 @@ export async function watch() {
 
   let isBuilding = false;
 
-  watcher.on('change', async (path) => {
-    if (isBuilding) {
-      console.log(pc.dim('Build in progress, skipping...'));
-      return;
-    }
+  watcher.on('change', (path) => {
+    void (async () => {
+      if (isBuilding) {
+        console.log(pc.dim('Build in progress, skipping...'));
+        return;
+      }
 
-    console.log(pc.dim(`\n${path} changed`));
-    isBuilding = true;
+      console.log(pc.dim(`\n${path} changed`));
+      isBuilding = true;
 
-    try {
-      await generate({});
-      await build();
-      console.log(pc.green('✓ Rebuild successful\n'));
-    } catch (error) {
-      // Errors are already logged by generate/build commands
-      // Just note the failure and continue watching
-      console.log(pc.red('✗ Rebuild failed\n'));
-    } finally {
-      isBuilding = false;
-      console.log(pc.dim('Watching for changes...'));
-    }
+      try {
+        await generate({});
+        build();
+        console.log(pc.green('✓ Rebuild successful\n'));
+      } catch (_error) {
+        // Errors are already logged by generate/build commands
+        // Just note the failure and continue watching
+        console.log(pc.red('✗ Rebuild failed\n'));
+      } finally {
+        isBuilding = false;
+        console.log(pc.dim('Watching for changes...'));
+      }
+    })();
   });
 
   watcher.on('error', (error) => {
@@ -61,9 +63,9 @@ export async function watch() {
   // Initial build
   try {
     await generate({});
-    await build();
+    build();
     console.log(pc.green('✓ Initial build successful\n'));
-  } catch (error) {
+  } catch (_error) {
     console.log(pc.red('✗ Initial build failed\n'));
   }
 
