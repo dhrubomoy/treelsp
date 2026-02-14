@@ -127,7 +127,7 @@ Currently implementing in this order (see DESIGN.md § Implementation Order):
 
 1. ✅ Project setup and monorepo structure
 2. ✅ Definition layer types (grammar, semantic, validation, lsp)
-3. ⏳ Grammar codegen (emit grammar.js)
+3. ✅ Grammar codegen (emit grammar.js)
 4. ⏳ CLI tooling
 5. ⏳ Runtime parser (Tree-sitter WASM loading, ASTNode wrapper)
 6. ⏳ Scope resolution
