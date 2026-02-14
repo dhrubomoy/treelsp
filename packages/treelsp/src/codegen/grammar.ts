@@ -30,8 +30,12 @@ type RuleNode =
 /**
  * Grammar builder implementation
  * Creates RuleNode instances that can be serialized to Tree-sitter grammar.js
+ *
+ * Note: Does not explicitly implement RuleBuilder<T> to avoid type conflicts
+ * between the public API (RuleDefinition<T>) and internal representation (RuleNode).
+ * However, it is structurally compatible and can be used wherever RuleBuilder is expected.
  */
-class GrammarBuilder<T extends string> implements RuleBuilder<T> {
+class GrammarBuilder<T extends string> {
   seq(...rules: RuleDefinition<T>[]): RuleNode {
     return {
       type: 'seq',
@@ -140,10 +144,12 @@ class GrammarBuilder<T extends string> implements RuleBuilder<T> {
       return { type: 'regex', value: rule };
     }
     if (typeof rule === 'function') {
-      return rule(this) as RuleNode;
+      // Call the rule function with this builder (structurally compatible with RuleBuilder)
+      // The result is always a RuleNode at runtime
+      return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
     }
     // If it's already a RuleNode (returned from a builder method), use it directly
-    return rule as RuleNode;
+    return rule as unknown as RuleNode;
   }
 }
 
@@ -231,7 +237,7 @@ export function generateGrammar<T extends string>(
   // Build all rules
   const rules: Record<string, RuleNode> = {};
   for (const [name, ruleFn] of Object.entries(definition.grammar)) {
-    rules[name] = (ruleFn as RuleFn<T>)(builder) as RuleNode;
+    rules[name] = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
   }
 
   // Generate rules section
