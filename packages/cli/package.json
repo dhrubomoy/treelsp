@@ -1,0 +1,40 @@
+{
+  "name": "@treelsp/cli",
+  "version": "0.0.1",
+  "description": "CLI tool for treelsp - LSP generator using Tree-sitter",
+  "type": "module",
+  "bin": {
+    "treelsp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "keywords": [
+    "lsp",
+    "cli",
+    "tree-sitter",
+    "codegen"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "treelsp": "workspace:*",
+    "commander": "^12.1.0",
+    "ora": "^8.1.1",
+    "prompts": "^2.4.2",
+    "picocolors": "^1.1.1",
+    "chokidar": "^4.0.3"
+  },
+  "devDependencies": {
+    "tsdown": "^0.2.17",
+    "typescript": "^5.7.3",
+    "@types/prompts": "^2.4.9"
+  }
+}

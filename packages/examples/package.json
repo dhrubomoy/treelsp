@@ -1,0 +1,18 @@
+{
+  "name": "examples",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Example languages for treelsp",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'No build needed'",
+    "test": "echo 'No tests yet'",
+    "clean": "rm -rf */generated"
+  },
+  "dependencies": {
+    "treelsp": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
