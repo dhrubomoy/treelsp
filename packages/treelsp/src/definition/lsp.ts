@@ -130,9 +130,8 @@ export interface KeywordDescriptor {
  * LSP definition - maps rule names to LSP descriptors
  */
 export type LspDefinition<T extends string = string> = {
-  [K in T | '$keywords' | '$unresolved']?: K extends '$keywords'
-    ? Record<string, KeywordDescriptor>
-    : K extends '$unresolved'
-    ? (node: any, ctx: LspContext) => string
-    : LspRule;
+  [K in T]?: LspRule;
+} & {
+  $keywords?: Record<string, KeywordDescriptor>;
+  $unresolved?: (node: any, ctx: LspContext) => string;
 };

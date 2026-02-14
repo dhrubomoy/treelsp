@@ -55,7 +55,7 @@ export async function watch() {
   });
 
   watcher.on('error', (error) => {
-    console.error(pc.red('Watcher error:'), error.message);
+    console.error(pc.red('Watcher error:'), error instanceof Error ? error.message : String(error));
   });
 
   console.log(pc.dim('Running initial build...\n'));
