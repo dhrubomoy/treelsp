@@ -4,6 +4,5 @@
  */
 
 export { generateGrammar } from './grammar.js';
-// Future exports:
-// export { generateASTTypes } from './ast-types.js';
-// export { generateServer } from './server.js';
+export { generateAstTypes } from './ast-types.js';
+export { generateServer } from './server.js';
