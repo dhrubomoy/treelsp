@@ -10,15 +10,18 @@ import type { CompletionItem, LspContext } from '../definition/lsp.js';
  * Returns scope-based completions + keyword completions
  */
 export function complete(node: any, ctx: LspContext): CompletionItem[] {
-  // TODO: Implement in runtime
-  return [];
+  return [
+    ...scopeCompletions(node, ctx),
+    ...keywordCompletions(ctx),
+  ];
 }
 
 /**
  * Get keyword completions from grammar
  */
-export function keywordCompletions(ctx: LspContext): CompletionItem[] {
-  // TODO: Implement in runtime
+export function keywordCompletions(_ctx: LspContext): CompletionItem[] {
+  // Delegate to runtime — defaults don't have access to LSP config directly
+  // This is a fallback; the runtime completion handler provides keyword completions
   return [];
 }
 
@@ -26,6 +29,20 @@ export function keywordCompletions(ctx: LspContext): CompletionItem[] {
  * Get scope-based completions
  */
 export function scopeCompletions(node: any, ctx: LspContext): CompletionItem[] {
-  // TODO: Implement in runtime
-  return [];
+  const scope = ctx.scopeOf(node);
+  if (!scope) {
+    return [];
+  }
+
+  const items: CompletionItem[] = [];
+  const declarations = scope.allDeclarations?.() ?? [];
+
+  for (const decl of declarations) {
+    items.push({
+      label: decl.name as string,
+      detail: decl.declaredBy as string,
+    });
+  }
+
+  return items;
 }
