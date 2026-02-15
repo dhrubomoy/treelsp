@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateServer } from './server.js';
+import { generateServer, generateManifest } from './server.js';
 import type { LanguageDefinition } from '../definition/index.js';
 
 /** Minimal language definition for testing */
@@ -139,5 +139,28 @@ describe('generateServer', () => {
     const result = generateServer(def);
     expect(result).toContain('LSP server for MyCustomLang');
     expect(result).toContain("languageId: 'mycustomlang'");
+  });
+});
+
+describe('generateManifest', () => {
+  it('generates valid JSON', () => {
+    const result = generateManifest(createTestDefinition());
+    const parsed = JSON.parse(result);
+    expect(parsed).toBeDefined();
+  });
+
+  it('includes language metadata', () => {
+    const result = JSON.parse(generateManifest(createTestDefinition()));
+    expect(result.name).toBe('TestLang');
+    expect(result.languageId).toBe('testlang');
+    expect(result.fileExtensions).toEqual(['.test']);
+    expect(result.server).toBe('./server.js');
+  });
+
+  it('uses lowercase language ID', () => {
+    const def = createTestDefinition();
+    def.name = 'MyLANG';
+    const result = JSON.parse(generateManifest(def));
+    expect(result.languageId).toBe('mylang');
   });
 });

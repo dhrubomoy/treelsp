@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generateGrammar, generateAstTypes, generateServer } from 'treelsp/codegen';
+import { generateGrammar, generateAstTypes, generateServer, generateManifest } from 'treelsp/codegen';
 import definition from './grammar.js';
 
 describe('mini-lang end-to-end', () => {
@@ -204,6 +204,29 @@ describe('mini-lang end-to-end', () => {
       const a = generateServer(definition);
       const b = generateServer(definition);
       expect(a).toBe(b);
+    });
+
+    it('manifest codegen is deterministic', () => {
+      const a = generateManifest(definition);
+      const b = generateManifest(definition);
+      expect(a).toBe(b);
+    });
+  });
+
+  // ========== Manifest Codegen ==========
+
+  describe('manifest codegen', () => {
+    it('generates valid JSON', () => {
+      const manifest = JSON.parse(generateManifest(definition));
+      expect(manifest).toBeDefined();
+    });
+
+    it('contains correct language metadata', () => {
+      const manifest = JSON.parse(generateManifest(definition));
+      expect(manifest.name).toBe('MiniLang');
+      expect(manifest.languageId).toBe('minilang');
+      expect(manifest.fileExtensions).toEqual(['.mini']);
+      expect(manifest.server).toBe('./server.js');
     });
   });
 });

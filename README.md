@@ -2,7 +2,7 @@
 
 A Langium-style LSP generator using Tree-sitter as the parsing backend.
 
-**Status:** Early development - core API design phase
+**Status:** Core implementation complete — integration testing phase
 
 ## What Is treelsp?
 
@@ -123,7 +123,7 @@ treelsp watch     # Watch mode - re-run generate + build
 
 ## Implementation Status
 
-All 8 implementation steps complete (see DESIGN.md § Implementation Order):
+All 8 core steps complete (see DESIGN.md § Implementation Order):
 
 1. ✅ Project setup and monorepo structure
 2. ✅ Definition layer types (grammar, semantic, validation, lsp)
@@ -133,6 +133,19 @@ All 8 implementation steps complete (see DESIGN.md § Implementation Order):
 6. ✅ Scope resolution (scope chain, resolver, workspace index)
 7. ✅ LSP handlers + server codegen
 8. ✅ End-to-end validation (mini-lang example)
+9. ✅ VS Code extension (manifest discovery, LanguageClient launch)
+
+### Next Steps
+
+These are the remaining tasks to go from "core complete" to "usable end-to-end":
+
+- [ ] **Compile grammar.wasm** — Wire tree-sitter CLI in `treelsp build` to compile `grammar.js → grammar.wasm`
+- [ ] **Live integration test** — Run the actual LSP server against `test.mini` with a real WASM parser to verify parsing, diagnostics, hover, go-to-definition all work
+- [ ] **Language contribution in extension** — Dynamically register `contributes.languages` from manifest so VS Code recognizes file extensions without hardcoding
+- [ ] **Syntax highlighting** — Generate `highlights.scm` queries from grammar for Tree-sitter-based syntax highlighting
+- [ ] **Publish pipeline** — VS Code Marketplace packaging for `@treelsp/vscode`, npm publishing for `treelsp` and `@treelsp/cli`
+- [ ] **Error recovery UX** — Surface meaningful errors when grammar.wasm is missing, server fails to start, etc.
+- [ ] **Second example language** — Validate the framework generalizes beyond mini-lang
 
 ## Key Design Decisions
 

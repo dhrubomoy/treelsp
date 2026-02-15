@@ -1,5 +1,5 @@
 /**
- * Generate command - emit grammar.js, AST types, server.ts
+ * Generate command - emit grammar.js, AST types, server.js, treelsp.json
  */
 
 import ora from 'ora';
@@ -8,7 +8,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
-import { generateGrammar, generateAstTypes, generateServer } from 'treelsp/codegen';
+import { generateGrammar, generateAstTypes, generateServer, generateManifest } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
 
 export async function generate(options: { watch?: boolean }) {
@@ -40,7 +40,8 @@ export async function generate(options: { watch?: boolean }) {
     // 3. Generate code artifacts
     const grammarJs = generateGrammar(definition);
     const astTypes = generateAstTypes(definition);
-    const serverTs = generateServer(definition);
+    const serverJs = generateServer(definition);
+    const manifest = generateManifest(definition);
 
     // 4. Create generated/ directory
     const genDir = resolve(process.cwd(), 'generated');
@@ -50,10 +51,11 @@ export async function generate(options: { watch?: boolean }) {
     await Promise.all([
       writeFile(resolve(genDir, 'grammar.js'), grammarJs, 'utf-8'),
       writeFile(resolve(genDir, 'ast.ts'), astTypes, 'utf-8'),
-      writeFile(resolve(genDir, 'server.ts'), serverTs, 'utf-8'),
+      writeFile(resolve(genDir, 'server.js'), serverJs, 'utf-8'),
+      writeFile(resolve(genDir, 'treelsp.json'), manifest, 'utf-8'),
     ]);
 
-    spinner.succeed('Generated grammar.js, ast.ts, server.ts');
+    spinner.succeed('Generated grammar.js, ast.ts, server.js, treelsp.json');
 
     if (!options.watch) {
       console.log(pc.dim('\nNext step: Run "treelsp build" to compile grammar to WASM'));
