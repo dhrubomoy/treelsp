@@ -214,7 +214,15 @@ export function generateServer<T extends string>(
   lines.push(`  const textDoc = textDocuments.get(params.textDocument.uri);`);
   lines.push(`  if (!textDoc) return [];`);
   lines.push(`  const state = await getDocumentState(textDoc);`);
-  lines.push(`  return service.provideSymbols(state);`);
+  lines.push(`  const symbols = service.provideSymbols(state);`);
+  lines.push(`  return symbols.map(s => ({`);
+  lines.push(`    name: s.name,`);
+  lines.push(`    kind: s.kindNumber,`);
+  lines.push(`    detail: s.detail,`);
+  lines.push(`    range: s.range,`);
+  lines.push(`    selectionRange: s.selectionRange,`);
+  lines.push(`    children: [],`);
+  lines.push(`  }));`);
   lines.push(`});`);
   lines.push(``);
 
