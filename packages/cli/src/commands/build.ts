@@ -3,9 +3,8 @@
  */
 
 import { execSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import ora from 'ora';
 import pc from 'picocolors';
 
@@ -32,22 +31,28 @@ export function build() {
       process.exit(1);
     }
 
-    // 3. Copy grammar.js to a temp directory for tree-sitter CLI
+    // 3. Run tree-sitter generate (generates C parser from grammar.js)
     //    tree-sitter runs grammar.js through Node.js, which fails in
     //    "type": "module" packages because grammar.js uses CommonJS.
-    //    A temp directory without package.json defaults to CommonJS.
+    //    A temporary package.json in generated/ overrides the parent to CommonJS.
     spinner.text = 'Generating C parser...';
-    const tmpBuildDir = resolve(tmpdir(), `treelsp-build-${Date.now()}`);
-    mkdirSync(tmpBuildDir, { recursive: true });
-    copyFileSync(grammarPath, resolve(tmpBuildDir, 'grammar.js'));
+    const genDir = resolve(process.cwd(), 'generated');
+    const genPkgJson = resolve(genDir, 'package.json');
+    const hadPkgJson = existsSync(genPkgJson);
+
+    if (!hadPkgJson) {
+      writeFileSync(genPkgJson, '{"type":"commonjs"}\n');
+    }
 
     try {
-      execSync(`tree-sitter generate ${resolve(tmpBuildDir, 'grammar.js')}`, {
+      execSync('tree-sitter generate generated/grammar.js', {
         stdio: 'pipe',
         cwd: process.cwd(),
       });
     } finally {
-      rmSync(tmpBuildDir, { recursive: true, force: true });
+      if (!hadPkgJson) {
+        rmSync(genPkgJson, { force: true });
+      }
     }
 
     // 4. Run tree-sitter build --wasm (compiles to WebAssembly)
