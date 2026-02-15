@@ -39,8 +39,8 @@ export interface DocumentScope {
   /** Root (global) scope */
   root: Scope;
 
-  /** Map from AST node to its scope */
-  nodeScopes: Map<ASTNode, Scope>;
+  /** Map from AST node ID to its scope (keyed by node.id for stable identity) */
+  nodeScopes: Map<number, Scope>;
 
   /** All references in the document */
   references: Reference[];
@@ -68,15 +68,26 @@ export function buildScopes(
 ): DocumentScope {
   const root = document.root;
 
-  // Map from node to its scope
-  const nodeScopes = new Map<ASTNode, Scope>();
+  // Map from node ID to its scope (keyed by node.id for stable identity)
+  const nodeScopes = new Map<number, Scope>();
 
   // All references (for resolution)
   const references: Reference[] = [];
 
   // Context for custom resolvers
   const context: ResolutionContext = {
-    scopeOf: (node) => nodeScopes.get(node) ?? null,
+    scopeOf: (node) => {
+      // Walk up parent chain to find the nearest scope
+      let current: ASTNode | null = node;
+      while (current) {
+        const scope = nodeScopes.get(current.id);
+        if (scope) {
+          return scope;
+        }
+        current = current.parent;
+      }
+      return null;
+    },
     resolveModule: () => null, // V1: Cross-file not yet implemented in resolver
     getReferences: () => references,
     getDeclarations: () => {
@@ -90,7 +101,7 @@ export function buildScopes(
 
   // Create root (global) scope
   const globalScope = new Scope('global', root, null);
-  nodeScopes.set(root, globalScope);
+  nodeScopes.set(root.id, globalScope);
 
   // Walk tree to build scopes and register declarations
   walkTree(root, globalScope, semantic, nodeScopes, references, context);
@@ -118,7 +129,7 @@ function walkTree(
   node: ASTNode,
   currentScope: Scope,
   semantic: SemanticDefinition,
-  nodeScopes: Map<ASTNode, Scope>,
+  nodeScopes: Map<number, Scope>,
   references: Reference[],
   context: ResolutionContext
 ): void {
@@ -128,7 +139,7 @@ function walkTree(
   let nodeScope = currentScope;
   if (rule?.scope) {
     nodeScope = new Scope(rule.scope, node, currentScope);
-    nodeScopes.set(node, nodeScope);
+    nodeScopes.set(node.id, nodeScope);
   }
 
   // Process declarations and references
@@ -151,7 +162,7 @@ function processDeclarations(
   rule: SemanticRule,
   _scope: Scope,
   _semantic: SemanticDefinition,
-  nodeScopes: Map<ASTNode, Scope>,
+  nodeScopes: Map<number, Scope>,
   context: ResolutionContext
 ): void {
   if (!rule.declares) {
@@ -218,12 +229,8 @@ function processReferences(
 
   const descriptor = rule.references;
 
-  // Get the name field
-  const nameNode = node.field(descriptor.field);
-  if (!nameNode) {
-    return;
-  }
-
+  // Get the name field (fall back to node itself for leaf/token nodes)
+  const nameNode = node.field(descriptor.field) ?? node;
   const name = nameNode.text;
   const to = Array.isArray(descriptor.to) ? descriptor.to : [descriptor.to];
 
@@ -296,13 +303,13 @@ function getVisibility(
 function getTargetScope(
   node: ASTNode,
   target: ScopeTarget,
-  nodeScopes: Map<ASTNode, Scope>
+  nodeScopes: Map<number, Scope>
 ): Scope | null {
   if (target === 'global') {
     // Walk up to root
     let current: ASTNode | null = node;
     while (current) {
-      const scope = nodeScopes.get(current);
+      const scope = nodeScopes.get(current.id);
       if (scope?.kind === 'global') {
         return scope;
       }
@@ -315,7 +322,7 @@ function getTargetScope(
     // Find nearest scope boundary
     let current: ASTNode | null = node.parent;
     while (current) {
-      const scope = nodeScopes.get(current);
+      const scope = nodeScopes.get(current.id);
       if (scope) {
         return scope;
       }
@@ -328,7 +335,7 @@ function getTargetScope(
     // Immediate parent that has a scope
     let current: ASTNode | null = node.parent;
     while (current) {
-      const scope = nodeScopes.get(current);
+      const scope = nodeScopes.get(current.id);
       if (scope) {
         return scope;
       }

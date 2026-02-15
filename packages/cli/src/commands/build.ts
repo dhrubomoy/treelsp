@@ -3,8 +3,9 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import ora from 'ora';
 import pc from 'picocolors';
 
@@ -31,19 +32,69 @@ export function build() {
       process.exit(1);
     }
 
-    // 3. Run tree-sitter generate (generates C parser from grammar.js)
+    // 3. Copy grammar.js to a temp directory for tree-sitter CLI
+    //    tree-sitter runs grammar.js through Node.js, which fails in
+    //    "type": "module" packages because grammar.js uses CommonJS.
+    //    A temp directory without package.json defaults to CommonJS.
     spinner.text = 'Generating C parser...';
-    execSync('tree-sitter generate generated/grammar.js', {
-      stdio: 'pipe',
-      cwd: process.cwd(),
-    });
+    const tmpBuildDir = resolve(tmpdir(), `treelsp-build-${Date.now()}`);
+    mkdirSync(tmpBuildDir, { recursive: true });
+    copyFileSync(grammarPath, resolve(tmpBuildDir, 'grammar.js'));
 
-    // 4. Run tree-sitter build-wasm (compiles to WebAssembly)
+    try {
+      execSync(`tree-sitter generate ${resolve(tmpBuildDir, 'grammar.js')}`, {
+        stdio: 'pipe',
+        cwd: process.cwd(),
+      });
+    } finally {
+      rmSync(tmpBuildDir, { recursive: true, force: true });
+    }
+
+    // 4. Run tree-sitter build --wasm (compiles to WebAssembly)
     spinner.text = 'Compiling to WASM...';
     execSync('tree-sitter build --wasm', {
       stdio: 'pipe',
       cwd: process.cwd(),
     });
+
+    // 5. Move tree-sitter-*.wasm to generated/grammar.wasm
+    //    tree-sitter outputs tree-sitter-{name}.wasm in cwd
+    spinner.text = 'Moving WASM output...';
+    const cwd = process.cwd();
+    const wasmFiles = readdirSync(cwd).filter(
+      f => f.startsWith('tree-sitter-') && f.endsWith('.wasm')
+    );
+    if (wasmFiles.length === 0) {
+      spinner.fail('tree-sitter build --wasm did not produce a .wasm file');
+      process.exit(1);
+    }
+    const sourceWasm = resolve(cwd, wasmFiles[0]!);
+    const destWasm = resolve(cwd, 'generated', 'grammar.wasm');
+    renameSync(sourceWasm, destWasm);
+
+    // 6. Clean up tree-sitter generate artifacts (C source, bindings, etc.)
+    const cleanupDirs = ['src', 'bindings'];
+    const cleanupFiles = [
+      'binding.gyp', 'Makefile', 'Package.swift', '.editorconfig',
+    ];
+    for (const dir of cleanupDirs) {
+      const p = resolve(cwd, dir);
+      if (existsSync(p)) {
+        rmSync(p, { recursive: true, force: true });
+      }
+    }
+    for (const file of cleanupFiles) {
+      const p = resolve(cwd, file);
+      if (existsSync(p)) {
+        rmSync(p, { force: true });
+      }
+    }
+    // Remove tree-sitter-{name}.pc files
+    for (const f of readdirSync(cwd)) {
+      if (f.startsWith('tree-sitter-') && f.endsWith('.pc')) {
+        rmSync(resolve(cwd, f), { force: true });
+      }
+    }
 
     spinner.succeed('Compiled grammar.wasm');
     console.log(pc.dim('\nGenerated files:'));
@@ -61,7 +112,7 @@ export function build() {
         console.error(pc.red('\nTree-sitter error:'));
         console.error(pc.dim(stderr));
 
-        if (stderr.includes('grammar.js')) {
+        if (stderr.includes('grammar')) {
           console.log(pc.dim('\nSuggestion: Check your grammar definition for errors'));
         } else if (stderr.includes('emcc') || stderr.includes('compiler')) {
           console.log(pc.dim('\nSuggestion: Ensure Emscripten is installed for WASM compilation'));

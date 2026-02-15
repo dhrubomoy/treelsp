@@ -117,6 +117,14 @@ export class ASTNode {
   // ========== Properties ==========
 
   /**
+   * Stable node identity (from Tree-sitter SyntaxNode.id)
+   * Safe to use as Map key — same tree node always returns same id
+   */
+  get id(): number {
+    return this.syntaxNode.id;
+  }
+
+  /**
    * Node type from grammar (e.g., 'variable_decl', 'identifier')
    */
   get type(): string {

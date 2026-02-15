@@ -114,7 +114,7 @@ function createMockDocument(root: ASTNode, uri = 'file:///test.ml'): DocumentSta
 
 function createMockDocScope(options: {
   root: Scope;
-  nodeScopes?: Map<ASTNode, Scope>;
+  nodeScopes?: Map<number, Scope>;
   references?: Reference[];
   declarations?: Declaration[];
 }): DocumentScope {
@@ -190,8 +190,8 @@ describe('LspContext', () => {
     it('should find scope for node in nodeScopes map', () => {
       const rootNode = createMockNode('program', 'program');
       const globalScope = new Scope('global', rootNode, null);
-      const nodeScopes = new Map<ASTNode, Scope>();
-      nodeScopes.set(rootNode, globalScope);
+      const nodeScopes = new Map<number, Scope>();
+      nodeScopes.set(rootNode.id, globalScope);
 
       const docScope = createMockDocScope({
         root: globalScope,
@@ -535,8 +535,8 @@ describe('provideCompletion', () => {
     globalScope.declare('x', xNode, 'variable_decl', 'private');
     globalScope.declare('y', yNode, 'variable_decl', 'private');
 
-    const nodeScopes = new Map<ASTNode, Scope>();
-    nodeScopes.set(rootNode, globalScope);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
 
     const docScope = createMockDocScope({
       root: globalScope,
@@ -557,8 +557,8 @@ describe('provideCompletion', () => {
   it('should return keyword completions', () => {
     const rootNode = createMockNode('program', '');
     const globalScope = new Scope('global', rootNode, null);
-    const nodeScopes = new Map<ASTNode, Scope>();
-    nodeScopes.set(rootNode, globalScope);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
 
     const docScope = createMockDocScope({
       root: globalScope,
@@ -589,8 +589,8 @@ describe('provideCompletion', () => {
     const xNode = createMockNode('identifier', 'x');
     globalScope.declare('x', xNode, 'variable_decl', 'private');
 
-    const nodeScopes = new Map<ASTNode, Scope>();
-    nodeScopes.set(rootNode, globalScope);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
 
     const docScope = createMockDocScope({
       root: globalScope,

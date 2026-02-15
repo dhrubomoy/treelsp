@@ -96,7 +96,7 @@ export function findDeclarationForNode(node: ASTNode, docScope: DocumentScope): 
 export function findScopeForNode(node: ASTNode, docScope: DocumentScope): Scope {
   let current: ASTNode | null = node;
   while (current) {
-    const scope = docScope.nodeScopes.get(current);
+    const scope = docScope.nodeScopes.get(current.id);
     if (scope) {
       return scope;
     }
