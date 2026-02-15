@@ -106,11 +106,14 @@ function getScopeCompletions(
       const lspRule = lsp?.[decl.declaredBy];
       const kind = lspRule?.completionKind;
 
-      items.push({
+      const item: CompletionItem = {
         label: decl.name,
-        kind,
         detail: decl.declaredBy,
-      });
+      };
+      if (kind) {
+        item.kind = kind;
+      }
+      items.push(item);
     }
 
     // Walk up scope chain (respecting isolation)
@@ -132,12 +135,19 @@ function getKeywordCompletions(lsp?: LspDefinition): CompletionItem[] {
     return [];
   }
 
-  return Object.entries(keywords).map(([keyword, descriptor]) => ({
-    label: keyword,
-    kind: 'Keyword' as CompletionKind,
-    detail: descriptor.detail,
-    documentation: descriptor.documentation,
-  }));
+  return Object.entries(keywords).map(([keyword, descriptor]) => {
+    const item: CompletionItem = {
+      label: keyword,
+      kind: 'Keyword' as CompletionKind,
+    };
+    if (descriptor.detail) {
+      item.detail = descriptor.detail;
+    }
+    if (descriptor.documentation) {
+      item.documentation = descriptor.documentation;
+    }
+    return item;
+  });
 }
 
 /**
@@ -153,7 +163,7 @@ function getCustomCompletions(
   }
 
   // Find applicable handler by walking up the node tree
-  let current = node;
+  let current: ASTNode | null = node;
   while (current) {
     const handler = lsp[current.type]?.complete;
     if (handler) {

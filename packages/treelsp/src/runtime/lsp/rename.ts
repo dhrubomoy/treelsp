@@ -3,7 +3,7 @@
  * Fully automatic from semantic layer
  */
 
-import type { Position } from '../parser/node.js';
+import type { ASTNode, Position } from '../parser/node.js';
 import type { DocumentState } from '../parser/tree.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
@@ -65,7 +65,7 @@ export function provideRename(
 
   const changes: Record<string, RenameEdit[]> = {};
 
-  function addEdit(uri: string, targetNode: { startPosition: Position; endPosition: Position }): void {
+  function addEdit(uri: string, targetNode: ASTNode): void {
     const edits = changes[uri] ?? (changes[uri] = []);
     edits.push({
       range: nodeToRange(targetNode),

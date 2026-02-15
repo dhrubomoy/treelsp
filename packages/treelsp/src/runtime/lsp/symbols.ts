@@ -90,11 +90,10 @@ export function provideSymbols(
     // Range: use parent node (the full declaration) if available
     const rangeNode = declParent ?? decl.node;
 
-    symbols.push({
+    const sym: DocumentSymbol = {
       name,
       kind: descriptor.kind,
       kindNumber: SYMBOL_KIND_MAP[descriptor.kind] ?? 13, // Variable as fallback
-      detail,
       range: {
         start: rangeNode.startPosition,
         end: rangeNode.endPosition,
@@ -103,7 +102,11 @@ export function provideSymbols(
         start: decl.node.startPosition,
         end: decl.node.endPosition,
       },
-    });
+    };
+    if (detail) {
+      sym.detail = detail;
+    }
+    symbols.push(sym);
   }
 
   return symbols;

@@ -565,12 +565,12 @@ describe('provideCompletion', () => {
       nodeScopes,
     });
 
-    const lsp: LspDefinition = {
+    const lsp = {
       $keywords: {
         'let': { detail: 'Declare variable' },
         'if': { detail: 'Conditional' },
       },
-    };
+    } as LspDefinition;
 
     const document = createMockDocument(rootNode);
     const result = provideCompletion(

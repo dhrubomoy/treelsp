@@ -241,11 +241,14 @@ function addValidationDiagnostic(
   diagnostics: Diagnostic[]
 ): void {
   const target = options?.at ?? node;
-  diagnostics.push({
+  const diag: Diagnostic = {
     range: { start: target.startPosition, end: target.endPosition },
     severity,
     message,
-    code: options?.code,
     source: 'treelsp',
-  });
+  };
+  if (options?.code) {
+    diag.code = options.code;
+  }
+  diagnostics.push(diag);
 }
