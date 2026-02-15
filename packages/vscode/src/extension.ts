@@ -194,6 +194,9 @@ async function startLanguageClient(
     debug: {
       module: serverModule,
       transport: TransportKind.stdio,
+      options: {
+        execArgv: ['--nolazy', '--inspect=6009'],
+      },
     },
   };
 

@@ -13,6 +13,28 @@
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],
       "preLaunchTask": "build-extension"
+    },
+    {
+      "name": "Attach to LSP Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "outFiles": [
+        "${workspaceFolder}/packages/examples/mini-lang/generated/**/*.js"
+      ],
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Extension + Server",
+      "configurations": [
+        "Launch Extension",
+        "Attach to LSP Server"
+      ]
     }
   ]
 }

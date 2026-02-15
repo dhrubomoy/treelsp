@@ -137,6 +137,7 @@ export async function build() {
       format: 'cjs',
       platform: 'node',
       outfile: bundlePath,
+      sourcemap: true,
       nodePaths: [resolve(treelspPkg, 'node_modules')],
       logLevel: 'silent',
     });
