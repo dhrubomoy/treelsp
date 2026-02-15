@@ -121,7 +121,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       definitionProvider: true,
       referencesProvider: true,
       completionProvider: { resolveProvider: false },
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
     },
   }));
@@ -191,6 +191,14 @@ export function startStdioServer(options: StdioServerOptions): void {
     const state = await getDocumentState(textDoc);
     const items = service.provideCompletion(state, params.position);
     return items.map(toLspCompletionItem);
+  });
+
+  // Prepare rename
+  connection.onPrepareRename(async (params) => {
+    const textDoc = textDocuments.get(params.textDocument.uri);
+    if (!textDoc) return null;
+    const state = await getDocumentState(textDoc);
+    return service.prepareRename(state, params.position);
   });
 
   // Rename

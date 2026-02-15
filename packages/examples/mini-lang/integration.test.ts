@@ -151,5 +151,30 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       // 'x' is used in sum and product and complex
       expect(refs.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('provides rename for variable declaration', () => {
+      const varDecls = doc.root.descendantsOfType('variable_decl');
+      const nameNode = varDecls[0]!.field('name')!;
+      const result = service.provideRename(doc, nameNode.startPosition, 'newX');
+      expect(result).not.toBeNull();
+      const edits = result!.changes[doc.uri];
+      expect(edits).toBeDefined();
+      expect(edits!.length).toBeGreaterThanOrEqual(2);
+      for (const edit of edits!) {
+        expect(edit.newText).toBe('newX');
+      }
+    });
+
+    it('provides rename for variable reference', () => {
+      const identifiers = doc.root.descendantsOfType('identifier');
+      const xNodes = identifiers.filter(id => id.text === 'x');
+      expect(xNodes.length).toBeGreaterThan(1);
+      const xRef = xNodes[1]!;
+      const result = service.provideRename(doc, xRef.startPosition, 'renamedX');
+      expect(result).not.toBeNull();
+      const edits = result!.changes[doc.uri];
+      expect(edits).toBeDefined();
+      expect(edits!.length).toBeGreaterThanOrEqual(2);
+    });
   });
 });

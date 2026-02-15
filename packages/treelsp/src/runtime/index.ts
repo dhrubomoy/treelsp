@@ -30,5 +30,5 @@ export { type Diagnostic, type DiagnosticSeverity } from './lsp/diagnostics.js';
 export { type HoverResult } from './lsp/hover.js';
 export { type DefinitionResult } from './lsp/definition.js';
 export { type ReferenceLocation } from './lsp/references.js';
-export { type RenameResult } from './lsp/rename.js';
+export { type PrepareRenameResult, type RenameResult } from './lsp/rename.js';
 export { type DocumentSymbol } from './lsp/symbols.js';

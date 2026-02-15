@@ -12,7 +12,7 @@ import { provideHover, type HoverResult } from './hover.js';
 import { provideDefinition, type DefinitionResult } from './definition.js';
 import { provideReferences, type ReferenceLocation } from './references.js';
 import { provideCompletion } from './completion.js';
-import { provideRename, type RenameResult } from './rename.js';
+import { prepareRename, provideRename, type PrepareRenameResult, type RenameResult } from './rename.js';
 import { provideSymbols, type DocumentSymbol } from './symbols.js';
 import type { CompletionItem } from '../../definition/lsp.js';
 
@@ -41,6 +41,9 @@ export interface LanguageService {
 
   /** Completion */
   provideCompletion(document: DocumentState, position: Position): CompletionItem[];
+
+  /** Prepare rename (check if rename is possible) */
+  prepareRename(document: DocumentState, position: Position): PrepareRenameResult | null;
 
   /** Rename */
   provideRename(document: DocumentState, position: Position, newName: string): RenameResult | null;
@@ -105,6 +108,11 @@ export function createServer(definition: LanguageDefinition): LanguageService {
       return provideCompletion(
         document, position, docScope, semantic, lsp, documents.getWorkspace()
       );
+    },
+
+    prepareRename(document: DocumentState, position: Position): PrepareRenameResult | null {
+      const docScope = getDocScope(document);
+      return prepareRename(document, position, docScope);
     },
 
     provideRename(document: DocumentState, position: Position, newName: string): RenameResult | null {

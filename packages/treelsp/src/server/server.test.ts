@@ -13,6 +13,7 @@ const mockConnection = {
   onDefinition: vi.fn(),
   onReferences: vi.fn(),
   onCompletion: vi.fn(),
+  onPrepareRename: vi.fn(),
   onRenameRequest: vi.fn(),
   onDocumentSymbol: vi.fn(),
   sendDiagnostics: vi.fn(),
@@ -86,7 +87,7 @@ describe('startStdioServer', () => {
     expect(result.capabilities.hoverProvider).toBe(true);
     expect(result.capabilities.definitionProvider).toBe(true);
     expect(result.capabilities.referencesProvider).toBe(true);
-    expect(result.capabilities.renameProvider).toBe(true);
+    expect(result.capabilities.renameProvider).toEqual({ prepareProvider: true });
     expect(result.capabilities.documentSymbolProvider).toBe(true);
     expect(result.capabilities.completionProvider).toEqual({ resolveProvider: false });
   });
@@ -97,6 +98,7 @@ describe('startStdioServer', () => {
     expect(mockConnection.onDefinition).toHaveBeenCalledOnce();
     expect(mockConnection.onReferences).toHaveBeenCalledOnce();
     expect(mockConnection.onCompletion).toHaveBeenCalledOnce();
+    expect(mockConnection.onPrepareRename).toHaveBeenCalledOnce();
     expect(mockConnection.onRenameRequest).toHaveBeenCalledOnce();
     expect(mockConnection.onDocumentSymbol).toHaveBeenCalledOnce();
   });

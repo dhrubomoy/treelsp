@@ -111,7 +111,7 @@ export async function build() {
       `import { startStdioServer } from 'treelsp/server';`,
       `import { resolve, dirname } from 'node:path';`,
       `import { fileURLToPath } from 'node:url';`,
-      `import definition from './grammar.js';`,
+      `import definition from './grammar.ts';`,
       ``,
       `const __dirname = dirname(fileURLToPath(import.meta.url));`,
       `const wasmPath = resolve(__dirname, 'grammar.wasm');`,
@@ -126,11 +126,12 @@ export async function build() {
     const treelspPkg = resolve(new URL(treelspServer).pathname, '..', '..', '..');
     const bundlePath = resolve(genDir, 'server.bundle.cjs');
 
+    // resolveDir is CWD so ./grammar.ts finds the user's language definition
     await esbuild({
       stdin: {
         contents: serverEntry,
-        resolveDir: genDir,
-        loader: 'js',
+        resolveDir: process.cwd(),
+        loader: 'ts',
       },
       bundle: true,
       format: 'cjs',

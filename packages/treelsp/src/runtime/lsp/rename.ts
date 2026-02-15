@@ -31,6 +31,46 @@ export interface RenameResult {
 }
 
 /**
+ * Prepare rename result — range and placeholder text
+ */
+export interface PrepareRenameResult {
+  range: { start: Position; end: Position };
+  placeholder: string;
+}
+
+/**
+ * Check if rename is possible at position and return the symbol range
+ *
+ * Returns the range of the symbol and its current name as placeholder,
+ * or null if the position is not on a renameable symbol.
+ */
+export function prepareRename(
+  document: DocumentState,
+  position: Position,
+  docScope: DocumentScope,
+): PrepareRenameResult | null {
+  const node = findNodeAtPosition(document.root, position);
+
+  const ref = findReferenceForNode(node, docScope);
+  if (ref?.resolved) {
+    return {
+      range: nodeToRange(node),
+      placeholder: ref.name,
+    };
+  }
+
+  const decl = findDeclarationForNode(node, docScope);
+  if (decl) {
+    return {
+      range: nodeToRange(node),
+      placeholder: decl.name,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Provide rename edits for symbol at position
  *
  * Strategy:
