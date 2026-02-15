@@ -1,0 +1,322 @@
+/**
+ * Unit tests for semantic tokens provider
+ * Uses mock ASTNode — no WASM dependency
+ */
+
+import { describe, it, expect } from 'vitest';
+import { ASTNode } from '../parser/node.js';
+import { Scope, type Declaration, type Reference } from '../scope/scope.js';
+import type { DocumentScope } from '../scope/resolver.js';
+import type { DocumentState } from '../parser/tree.js';
+import type { SemanticDefinition } from '../../definition/semantic.js';
+import type { LspDefinition } from '../../definition/lsp.js';
+import { provideSemanticTokensFull, SEMANTIC_TOKEN_TYPES } from './semantic-tokens.js';
+
+// ========== Mock Helpers ==========
+
+let nodeIdCounter = 1000;
+
+function createMockNode(
+  type: string,
+  text: string,
+  options?: {
+    startLine?: number;
+    startChar?: number;
+    endLine?: number;
+    endChar?: number;
+    parent?: any;
+    children?: any[];
+    namedChildren?: any[];
+    isNamed?: boolean;
+    fields?: Record<string, any>;
+  }
+): ASTNode {
+  const startLine = options?.startLine ?? 0;
+  const startChar = options?.startChar ?? 0;
+  const endLine = options?.endLine ?? startLine;
+  const endChar = options?.endChar ?? (startChar + text.length);
+  const id = nodeIdCounter++;
+
+  const mockSyntaxNode: any = {
+    id,
+    type,
+    text,
+    isError: false,
+    hasError: false,
+    isMissing: false,
+    isNamed: options?.isNamed ?? true,
+    parent: options?.parent ?? null,
+    children: options?.children ?? [],
+    namedChildren: options?.namedChildren ?? [],
+    childCount: (options?.children ?? []).length,
+    namedChildCount: (options?.namedChildren ?? []).length,
+    startPosition: { row: startLine, column: startChar },
+    endPosition: { row: endLine, column: endChar },
+    startIndex: startChar,
+    endIndex: endChar,
+    childForFieldName: (name: string) => options?.fields?.[name] ?? null,
+    childrenForFieldName: (name: string) => {
+      const child = options?.fields?.[name];
+      return child ? [child] : [];
+    },
+    child: (i: number) => (options?.children ?? [])[i] ?? null,
+    namedChild: (i: number) => (options?.namedChildren ?? [])[i] ?? null,
+    descendantForIndex: function () { return this; },
+    descendantForPosition: function () { return this; },
+    descendantsOfType: () => [],
+    toString: () => text,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  return new ASTNode(mockSyntaxNode);
+}
+
+function createMockDocument(root: ASTNode, uri = 'file:///test.ml'): DocumentState {
+  return {
+    root,
+    text: root.text,
+    uri,
+    version: 1,
+    languageId: 'test',
+  } as unknown as DocumentState;
+}
+
+function tokenTypeIndex(name: string): number {
+  return SEMANTIC_TOKEN_TYPES.indexOf(name as typeof SEMANTIC_TOKEN_TYPES[number]);
+}
+
+describe('provideSemanticTokensFull', () => {
+  it('returns empty data for empty document', () => {
+    const root = createMockNode('program', '');
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    expect(result.data).toEqual([]);
+  });
+
+  it('classifies keyword tokens', () => {
+    // Simulate: "let" keyword as anonymous leaf
+    const letNode = createMockNode('let', 'let', {
+      startLine: 0, startChar: 0, endChar: 3, isNamed: false,
+    });
+    const root = createMockNode('program', 'let x = 1;', {
+      children: [letNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    // Should contain a keyword token
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    // First token: deltaLine=0, deltaChar=0, length=3, type=keyword(15), modifiers=0
+    expect(result.data[0]).toBe(0); // deltaLine
+    expect(result.data[1]).toBe(0); // deltaChar
+    expect(result.data[2]).toBe(3); // length
+    expect(result.data[3]).toBe(tokenTypeIndex('keyword')); // tokenType
+    expect(result.data[4]).toBe(0); // modifiers
+  });
+
+  it('classifies operator tokens', () => {
+    const opNode = createMockNode('+', '+', {
+      startLine: 0, startChar: 5, endChar: 6, isNamed: false,
+    });
+    const root = createMockNode('program', 'a + b', {
+      children: [opNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('operator'));
+  });
+
+  it('classifies declarations with declaration modifier', () => {
+    const nameNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endChar: 5,
+    });
+    const root = createMockNode('program', 'let x = 1;', {
+      children: [nameNode._syntaxNode],
+      namedChildren: [nameNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const decl: Declaration = {
+      name: 'x',
+      node: nameNode,
+      declaredBy: 'variable_decl',
+      visibility: 'private',
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [decl],
+    };
+
+    const lsp: LspDefinition = {
+      variable_decl: { completionKind: 'Variable' },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    // Find the token for 'x'
+    expect(result.data[3]).toBe(tokenTypeIndex('variable'));
+    expect(result.data[4]).toBe(1); // bit 0 = declaration modifier
+  });
+
+  it('classifies references based on declaring rule completionKind', () => {
+    const refNode = createMockNode('identifier', 'myFunc', {
+      startLine: 1, startChar: 0, endChar: 6,
+    });
+    const root = createMockNode('program', 'myFunc', {
+      children: [refNode._syntaxNode],
+      namedChildren: [refNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const declNode = createMockNode('identifier', 'myFunc', {
+      startLine: 0, startChar: 3, endChar: 9,
+    });
+    const decl: Declaration = {
+      name: 'myFunc',
+      node: declNode,
+      declaredBy: 'function_decl',
+      visibility: 'private',
+    };
+    const ref: Reference = {
+      node: refNode,
+      name: 'myFunc',
+      to: ['function_decl'],
+      resolved: decl,
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [ref],
+      declarations: [],
+    };
+
+    const lsp: LspDefinition = {
+      function_decl: { completionKind: 'Function' },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('function'));
+    expect(result.data[4]).toBe(0); // no declaration modifier for references
+  });
+
+  it('classifies number tokens by rule name', () => {
+    const numNode = createMockNode('number', '42', {
+      startLine: 0, startChar: 0, endChar: 2,
+    });
+    const root = createMockNode('program', '42', {
+      children: [numNode._syntaxNode],
+      namedChildren: [numNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('number'));
+  });
+
+  it('classifies string tokens by rule name', () => {
+    const strNode = createMockNode('string_literal', '"hello"', {
+      startLine: 0, startChar: 0, endChar: 7,
+    });
+    const root = createMockNode('program', '"hello"', {
+      children: [strNode._syntaxNode],
+      namedChildren: [strNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('string'));
+  });
+
+  it('produces delta-encoded output sorted by position', () => {
+    // Two keywords on different lines
+    const letNode1 = createMockNode('let', 'let', {
+      startLine: 0, startChar: 0, endChar: 3, isNamed: false,
+    });
+    const letNode2 = createMockNode('let', 'let', {
+      startLine: 1, startChar: 0, endChar: 3, isNamed: false,
+    });
+    const root = createMockNode('program', 'let\nlet', {
+      children: [letNode1._syntaxNode, letNode2._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {});
+    // Two tokens, 5 values each
+    expect(result.data.length).toBe(10);
+    // First token: line 0
+    expect(result.data[0]).toBe(0); // deltaLine
+    expect(result.data[1]).toBe(0); // deltaChar
+    // Second token: line 1 (deltaLine=1)
+    expect(result.data[5]).toBe(1); // deltaLine
+    expect(result.data[6]).toBe(0); // deltaChar (absolute since new line)
+  });
+
+  it('classifies unresolved references as variable via semantic', () => {
+    const idNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endChar: 1,
+    });
+    const root = createMockNode('program', 'x', {
+      children: [idNode._syntaxNode],
+      namedChildren: [idNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const semantic: SemanticDefinition = {
+      identifier: { references: { field: 'name', to: 'variable_decl' } },
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [],
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, semantic);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('variable'));
+  });
+});

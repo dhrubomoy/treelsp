@@ -16,6 +16,11 @@ export interface TreelspManifest {
   fileExtensions: string[];
   /** Path to compiled server entry point, relative to manifest */
   server: string;
+  /** Paths to Tree-sitter query files, relative to manifest */
+  queries: {
+    highlights: string;
+    locals: string;
+  };
 }
 
 /**
@@ -34,6 +39,10 @@ export function generateManifest<T extends string>(
     languageId: definition.name.toLowerCase(),
     fileExtensions: definition.fileExtensions,
     server: './server.bundle.cjs',
+    queries: {
+      highlights: './queries/highlights.scm',
+      locals: './queries/locals.scm',
+    },
   };
   return JSON.stringify(manifest, null, 2) + '\n';
 }

@@ -18,6 +18,11 @@ const mockConnection = {
   onDocumentSymbol: vi.fn(),
   sendDiagnostics: vi.fn(),
   listen: vi.fn(),
+  languages: {
+    semanticTokens: {
+      on: vi.fn(),
+    },
+  },
 };
 
 // Mock TextDocuments
@@ -90,6 +95,7 @@ describe('startStdioServer', () => {
     expect(result.capabilities.renameProvider).toEqual({ prepareProvider: true });
     expect(result.capabilities.documentSymbolProvider).toBe(true);
     expect(result.capabilities.completionProvider).toEqual({ resolveProvider: false });
+    expect(result.capabilities.semanticTokensProvider).toBeDefined();
   });
 
   it('registers all LSP request handlers', async () => {

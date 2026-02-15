@@ -29,6 +29,10 @@ describe('generateManifest', () => {
     expect(result.languageId).toBe('testlang');
     expect(result.fileExtensions).toEqual(['.test']);
     expect(result.server).toBe('./server.bundle.cjs');
+    expect(result.queries).toEqual({
+      highlights: './queries/highlights.scm',
+      locals: './queries/locals.scm',
+    });
   });
 
   it('uses lowercase language ID', () => {

@@ -14,6 +14,7 @@ import { provideReferences, type ReferenceLocation } from './references.js';
 import { provideCompletion } from './completion.js';
 import { prepareRename, provideRename, type PrepareRenameResult, type RenameResult } from './rename.js';
 import { provideSymbols, type DocumentSymbol } from './symbols.js';
+import { provideSemanticTokensFull, type SemanticTokensResult } from './semantic-tokens.js';
 import type { CompletionItem } from '../../definition/lsp.js';
 
 /**
@@ -50,6 +51,9 @@ export interface LanguageService {
 
   /** Document symbols */
   provideSymbols(document: DocumentState): DocumentSymbol[];
+
+  /** Semantic tokens (full document) */
+  provideSemanticTokensFull(document: DocumentState): SemanticTokensResult;
 }
 
 /**
@@ -130,6 +134,11 @@ export function createServer(definition: LanguageDefinition): LanguageService {
     provideSymbols(document: DocumentState): DocumentSymbol[] {
       const docScope = getDocScope(document);
       return provideSymbols(docScope, lsp);
+    },
+
+    provideSemanticTokensFull(document: DocumentState): SemanticTokensResult {
+      const docScope = getDocScope(document);
+      return provideSemanticTokensFull(document, docScope, semantic, lsp);
     },
   };
 }

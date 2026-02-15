@@ -8,7 +8,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
-import { generateGrammar, generateAstTypes, generateManifest } from 'treelsp/codegen';
+import { generateGrammar, generateAstTypes, generateManifest, generateHighlights, generateLocals } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
 
 export async function generate(options: { watch?: boolean }) {
@@ -41,19 +41,24 @@ export async function generate(options: { watch?: boolean }) {
     const grammarJs = generateGrammar(definition);
     const astTypes = generateAstTypes(definition);
     const manifest = generateManifest(definition);
+    const highlightsSCM = generateHighlights(definition);
+    const localsSCM = generateLocals(definition);
 
-    // 4. Create generated/ directory
+    // 4. Create generated/ and generated/queries/ directories
     const genDir = resolve(process.cwd(), 'generated');
-    await mkdir(genDir, { recursive: true });
+    const queriesDir = resolve(genDir, 'queries');
+    await mkdir(queriesDir, { recursive: true });
 
     // 5. Write output files
     await Promise.all([
       writeFile(resolve(genDir, 'grammar.js'), grammarJs, 'utf-8'),
       writeFile(resolve(genDir, 'ast.ts'), astTypes, 'utf-8'),
       writeFile(resolve(genDir, 'treelsp.json'), manifest, 'utf-8'),
+      writeFile(resolve(queriesDir, 'highlights.scm'), highlightsSCM, 'utf-8'),
+      writeFile(resolve(queriesDir, 'locals.scm'), localsSCM, 'utf-8'),
     ]);
 
-    spinner.succeed('Generated grammar.js, ast.ts, treelsp.json');
+    spinner.succeed('Generated grammar.js, ast.ts, treelsp.json, queries/highlights.scm, queries/locals.scm');
 
     if (!options.watch) {
       console.log(pc.dim('\nNext step: Run "treelsp build" to compile grammar to WASM'));

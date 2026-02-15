@@ -32,3 +32,8 @@ export { type DefinitionResult } from './lsp/definition.js';
 export { type ReferenceLocation } from './lsp/references.js';
 export { type PrepareRenameResult, type RenameResult } from './lsp/rename.js';
 export { type DocumentSymbol } from './lsp/symbols.js';
+export {
+  type SemanticTokensResult,
+  SEMANTIC_TOKEN_TYPES,
+  SEMANTIC_TOKEN_MODIFIERS,
+} from './lsp/semantic-tokens.js';

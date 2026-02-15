@@ -18,7 +18,7 @@ import {
   type CompletionItem as LspCompletionItem,
 } from 'vscode-languageserver/lib/node/main.js';
 import { Position, TextDocument } from 'vscode-languageserver-textdocument';
-import { createServer, createDocumentState } from '../runtime/index.js';
+import { createServer, createDocumentState, SEMANTIC_TOKEN_TYPES, SEMANTIC_TOKEN_MODIFIERS } from '../runtime/index.js';
 import { COMPLETION_KIND_MAP } from '../runtime/lsp/completion.js';
 import type { LanguageDefinition } from '../definition/index.js';
 import type { DocumentState } from '../runtime/parser/tree.js';
@@ -139,6 +139,13 @@ export function startStdioServer(options: StdioServerOptions): void {
       completionProvider: { resolveProvider: false },
       renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
+      semanticTokensProvider: {
+        legend: {
+          tokenTypes: [...SEMANTIC_TOKEN_TYPES],
+          tokenModifiers: [...SEMANTIC_TOKEN_MODIFIERS],
+        },
+        full: true,
+      },
     },
   }));
 
@@ -277,6 +284,14 @@ export function startStdioServer(options: StdioServerOptions): void {
       }
       return sym;
     });
+  });
+
+  // Semantic tokens
+  connection.languages.semanticTokens.on(async (params) => {
+    const textDoc = textDocuments.get(params.textDocument.uri);
+    if (!textDoc) return { data: [] };
+    const state = await getDocumentState(textDoc);
+    return service.provideSemanticTokensFull(state);
   });
 
   // Start listening
