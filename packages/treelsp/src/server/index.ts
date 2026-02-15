@@ -17,7 +17,7 @@ import {
   type DocumentSymbol as LspDocumentSymbol,
   type CompletionItem as LspCompletionItem,
 } from 'vscode-languageserver/lib/node/main.js';
-import { TextDocument } from 'vscode-languageserver-textdocument';
+import { Position, TextDocument } from 'vscode-languageserver-textdocument';
 import { createServer, createDocumentState } from '../runtime/index.js';
 import { COMPLETION_KIND_MAP } from '../runtime/lsp/completion.js';
 import type { LanguageDefinition } from '../definition/index.js';
@@ -44,6 +44,10 @@ function toLspCompletionItem(item: InternalCompletionItem): LspCompletionItem {
     lspItem.insertText = item.insertText;
   }
   return lspItem;
+}
+
+function getRangeStr(start: Position, end: Position) {
+  return `${start.line}:${start.character}-${end.line}:${end.character}`;
 }
 
 /**
@@ -106,6 +110,7 @@ export function startStdioServer(options: StdioServerOptions): void {
   async function validateDocument(textDoc: TextDocument): Promise<void> {
     const state = await getDocumentState(textDoc);
     const diagnostics = service.computeDiagnostics(state);
+    connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`)}`)
     connection.sendDiagnostics({
       uri: textDoc.uri,
       version: textDoc.version,
@@ -190,7 +195,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       const state = await getDocumentState(textDoc);
       const pos = params.position;
       const node = state.root.descendantForPosition(pos);
-      connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
+      connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${getRangeStr(node.startPosition, node.endPosition)}`);
       const result = service.provideDefinition(state, params.position);
       connection.console.log(`[definition] result=${result ? `${result.uri} ${result.range.start.line}:${result.range.start.character}` : 'null'}`);
       if (!result) return null;
