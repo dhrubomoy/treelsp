@@ -5,4 +5,4 @@
 
 export { generateGrammar } from './grammar.js';
 export { generateAstTypes } from './ast-types.js';
-export { generateServer, generateManifest, type TreelspManifest } from './server.js';
+export { generateManifest, type TreelspManifest } from './server.js';

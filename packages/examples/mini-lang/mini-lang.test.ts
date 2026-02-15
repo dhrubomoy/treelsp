@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generateGrammar, generateAstTypes, generateServer, generateManifest } from 'treelsp/codegen';
+import { generateGrammar, generateAstTypes, generateManifest } from 'treelsp/codegen';
 import definition from './grammar.js';
 
 describe('mini-lang end-to-end', () => {
@@ -139,52 +139,6 @@ describe('mini-lang end-to-end', () => {
     });
   });
 
-  // ========== Server Codegen ==========
-
-  describe('server codegen', () => {
-    it('generates non-empty output', () => {
-      const server = generateServer(definition);
-      expect(server.length).toBeGreaterThan(0);
-    });
-
-    it('generates server for MiniLang', () => {
-      const server = generateServer(definition);
-      expect(server).toContain('LSP server for MiniLang');
-      expect(server).toContain("languageId: 'minilang'");
-    });
-
-    it('imports all required dependencies', () => {
-      const server = generateServer(definition);
-      expect(server).toContain("from 'vscode-languageserver/node'");
-      expect(server).toContain("from 'vscode-languageserver-textdocument'");
-      expect(server).toContain("from 'treelsp/runtime'");
-      expect(server).toContain("from '../grammar.js'");
-    });
-
-    it('wires all LSP capabilities', () => {
-      const server = generateServer(definition);
-      expect(server).toContain('hoverProvider: true');
-      expect(server).toContain('definitionProvider: true');
-      expect(server).toContain('referencesProvider: true');
-      expect(server).toContain('completionProvider');
-      expect(server).toContain('renameProvider: true');
-      expect(server).toContain('documentSymbolProvider: true');
-    });
-
-    it('handles full document lifecycle', () => {
-      const server = generateServer(definition);
-      expect(server).toContain('onDidOpen');
-      expect(server).toContain('onDidChangeContent');
-      expect(server).toContain('onDidClose');
-      expect(server).toContain('state.dispose()');
-    });
-
-    it('starts connection', () => {
-      const server = generateServer(definition);
-      expect(server).toContain('connection.listen()');
-    });
-  });
-
   // ========== Codegen Determinism ==========
 
   describe('codegen determinism', () => {
@@ -197,12 +151,6 @@ describe('mini-lang end-to-end', () => {
     it('AST types codegen is deterministic', () => {
       const a = generateAstTypes(definition);
       const b = generateAstTypes(definition);
-      expect(a).toBe(b);
-    });
-
-    it('server codegen is deterministic', () => {
-      const a = generateServer(definition);
-      const b = generateServer(definition);
       expect(a).toBe(b);
     });
 
