@@ -46,15 +46,20 @@ export function createLspContext(
  * identifier), tree-sitter returns the parent node because that position falls
  * in whitespace. In that case, look one character back to find the token the
  * user likely intended.
+ *
+ * Similarly, when the cursor lands on an anonymous node (punctuation like ";",
+ * "+", "="), look one character back to find the named token the user likely
+ * intended. This handles the common case of clicking at the boundary between
+ * an identifier and adjacent punctuation.
  */
 export function findNodeAtPosition(root: ASTNode, position: Position): ASTNode {
   const node = root.descendantForPosition(position);
-  if (node.namedChildCount > 0 && position.character > 0) {
+  if (position.character > 0 && (node.namedChildCount > 0 || !node.isNamed)) {
     const prev = root.descendantForPosition({
       line: position.line,
       character: position.character - 1,
     });
-    if (prev.namedChildCount === 0) {
+    if (prev.namedChildCount === 0 && prev.isNamed) {
       return prev;
     }
   }

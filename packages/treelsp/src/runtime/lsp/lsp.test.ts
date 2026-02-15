@@ -44,6 +44,7 @@ function createMockNode(
     namedChildren?: any[];
     isError?: boolean;
     isMissing?: boolean;
+    isNamed?: boolean;
     fields?: Record<string, any>;
   }
 ): ASTNode {
@@ -60,7 +61,7 @@ function createMockNode(
     isError: options?.isError ?? false,
     hasError: options?.isError ?? false,
     isMissing: options?.isMissing ?? false,
-    isNamed: true,
+    isNamed: options?.isNamed ?? true,
     parent: options?.parent ?? null,
     children: options?.children ?? [],
     namedChildren: options?.namedChildren ?? [],
@@ -81,7 +82,11 @@ function createMockNode(
     descendantForPosition: function (pos: any): any {
       // Recursively find the smallest node containing the position.
       // End position is exclusive (matching tree-sitter semantics).
-      for (const child of (options?.namedChildren ?? [])) {
+      // Search all children (named + anonymous) to match tree-sitter behavior.
+      const allChildren = (options?.children ?? []).length > 0
+        ? (options?.children ?? [])
+        : (options?.namedChildren ?? []);
+      for (const child of allChildren) {
         const childStart = child.startPosition;
         const childEnd = child.endPosition;
         if (
@@ -317,6 +322,28 @@ describe('findNodeAtPosition', () => {
 
     // Position at char 1 hits "y" directly (leaf) → no fallback needed
     const node = findNodeAtPosition(rootNode, { line: 0, character: 1 });
+    expect(node.type).toBe('identifier');
+    expect(node.text).toBe('y');
+  });
+
+  it('should fall back when position lands on anonymous node like semicolon', () => {
+    // "y" at (0, 14)-(0, 15) named, ";" at (0, 15)-(0, 16) anonymous
+    // Clicking at the right edge of "y" sends position 15 which hits ";"
+    const yNode = createMockNode('identifier', 'y', {
+      startLine: 0, startChar: 14, endLine: 0, endChar: 15,
+      isNamed: true,
+    });
+    const semiNode = createMockNode(';', ';', {
+      startLine: 0, startChar: 15, endLine: 0, endChar: 16,
+      isNamed: false,
+    });
+    const rootNode = createMockNode('program', 'let sum = x + y;', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 16,
+      children: [(yNode as any)._syntaxNode, (semiNode as any)._syntaxNode],
+    });
+
+    // Position at char 15 hits ";" → should fall back to "y"
+    const node = findNodeAtPosition(rootNode, { line: 0, character: 15 });
     expect(node.type).toBe('identifier');
     expect(node.text).toBe('y');
   });
