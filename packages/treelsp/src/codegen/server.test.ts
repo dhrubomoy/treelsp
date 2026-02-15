@@ -154,7 +154,7 @@ describe('generateManifest', () => {
     expect(result.name).toBe('TestLang');
     expect(result.languageId).toBe('testlang');
     expect(result.fileExtensions).toEqual(['.test']);
-    expect(result.server).toBe('./server.js');
+    expect(result.server).toBe('./server.bundle.cjs');
   });
 
   it('uses lowercase language ID', () => {

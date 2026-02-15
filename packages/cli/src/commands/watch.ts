@@ -41,7 +41,7 @@ export async function watch() {
 
       try {
         await generate({});
-        build();
+        await build();
         console.log(pc.green('✓ Rebuild successful\n'));
       } catch (_error) {
         // Errors are already logged by generate/build commands
@@ -63,7 +63,7 @@ export async function watch() {
   // Initial build
   try {
     await generate({});
-    build();
+    await build();
     console.log(pc.green('✓ Initial build successful\n'));
   } catch (_error) {
     console.log(pc.red('✗ Initial build failed\n'));

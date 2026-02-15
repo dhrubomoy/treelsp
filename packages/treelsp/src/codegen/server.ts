@@ -255,7 +255,7 @@ export function generateManifest<T extends string>(
     name: definition.name,
     languageId: definition.name.toLowerCase(),
     fileExtensions: definition.fileExtensions,
-    server: './server.js',
+    server: './server.bundle.cjs',
   };
   return JSON.stringify(manifest, null, 2) + '\n';
 }

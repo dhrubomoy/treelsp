@@ -226,7 +226,7 @@ describe('mini-lang end-to-end', () => {
       expect(manifest.name).toBe('MiniLang');
       expect(manifest.languageId).toBe('minilang');
       expect(manifest.fileExtensions).toEqual(['.mini']);
-      expect(manifest.server).toBe('./server.js');
+      expect(manifest.server).toBe('./server.bundle.cjs');
     });
   });
 });

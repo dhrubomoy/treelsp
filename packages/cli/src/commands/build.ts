@@ -1,14 +1,15 @@
 /**
- * Build command - compile grammar.js to WASM
+ * Build command - compile grammar.js to WASM and bundle server
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { build as esbuild } from 'esbuild';
 import ora from 'ora';
 import pc from 'picocolors';
 
-export function build() {
+export async function build() {
   const spinner = ora('Checking prerequisites...').start();
 
   try {
@@ -101,10 +102,55 @@ export function build() {
       }
     }
 
-    spinner.succeed('Compiled grammar.wasm');
+    // 7. Bundle server.js into a self-contained CJS file
+    //    The generated server imports treelsp/runtime and vscode-languageserver
+    //    which live in the treelsp package's node_modules (pnpm doesn't hoist).
+    //    We resolve the treelsp package location and add its node_modules to nodePaths.
+    const serverPath = resolve(genDir, 'server.js');
+    if (existsSync(serverPath)) {
+      spinner.text = 'Bundling language server...';
+      // Locate treelsp's node_modules so esbuild can resolve vscode-languageserver.
+      // import.meta.resolve is synchronous in Node 20+ and returns a file:// URL.
+      const treelspRuntime = import.meta.resolve('treelsp/runtime');
+      // treelsp/runtime resolves to .../packages/treelsp/dist/runtime/index.js
+      const treelspPkg = resolve(new URL(treelspRuntime).pathname, '..', '..', '..');
+      const bundlePath = resolve(genDir, 'server.bundle.cjs');
+      await esbuild({
+        entryPoints: [serverPath],
+        bundle: true,
+        format: 'cjs',
+        platform: 'node',
+        outfile: bundlePath,
+        nodePaths: [resolve(treelspPkg, 'node_modules')],
+        logLevel: 'silent',
+      });
+      // esbuild replaces import.meta with an empty object in CJS mode,
+      // so import.meta.url becomes undefined. Patch __dirname usage directly.
+      const { readFileSync } = await import('node:fs');
+      let bundleCode = readFileSync(bundlePath, 'utf-8');
+      bundleCode = bundleCode.replace(
+        /var import_meta\s*=\s*\{\s*\};/,
+        'var import_meta = { url: require("url").pathToFileURL(__filename).href };'
+      );
+      writeFileSync(bundlePath, bundleCode);
+
+      // web-tree-sitter needs tree-sitter.wasm alongside the server bundle.
+      // When bundled, it looks in the same directory as the JS file.
+      const treelspNodeModules = resolve(treelspPkg, 'node_modules');
+      const tsWasmSrc = resolve(treelspNodeModules, 'web-tree-sitter', 'tree-sitter.wasm');
+      const tsWasmDest = resolve(genDir, 'tree-sitter.wasm');
+      if (existsSync(tsWasmSrc) && !existsSync(tsWasmDest)) {
+        copyFileSync(tsWasmSrc, tsWasmDest);
+      }
+    }
+
+    spinner.succeed('Build complete');
     console.log(pc.dim('\nGenerated files:'));
     console.log(pc.dim('  generated/grammar.js'));
     console.log(pc.dim('  generated/grammar.wasm'));
+    if (existsSync(resolve(genDir, 'server.bundle.cjs'))) {
+      console.log(pc.dim('  generated/server.bundle.cjs'));
+    }
 
   } catch (error) {
     spinner.fail('Build failed');

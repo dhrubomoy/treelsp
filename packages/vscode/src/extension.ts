@@ -131,10 +131,9 @@ async function startLanguageClient(
     },
   };
 
-  // Build document selectors from file extensions
+  // Use pattern-based selectors (language ID may not be registered in contributes)
   const documentSelector = manifest.fileExtensions.map(ext => ({
     scheme: 'file' as const,
-    language: manifest.languageId,
     pattern: `**/*${ext}`,
   }));
 

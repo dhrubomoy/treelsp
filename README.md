@@ -139,8 +139,8 @@ All 8 core steps complete (see DESIGN.md § Implementation Order):
 
 These are the remaining tasks to go from "core complete" to "usable end-to-end":
 
-- [ ] **Compile grammar.wasm** — Wire tree-sitter CLI in `treelsp build` to compile `grammar.js → grammar.wasm`
-- [ ] **Live integration test** — Run the actual LSP server against `test.mini` with a real WASM parser to verify parsing, diagnostics, hover, go-to-definition all work
+- [x] **Compile grammar.wasm** — Wire tree-sitter CLI in `treelsp build` to compile `grammar.js → grammar.wasm`
+- [x] **Live integration test** — Run the actual LSP server against `test.mini` with a real WASM parser to verify parsing, diagnostics, hover, go-to-definition all work
 - [ ] **Language contribution in extension** — Dynamically register `contributes.languages` from manifest so VS Code recognizes file extensions without hardcoding
 - [ ] **Syntax highlighting** — Generate `highlights.scm` queries from grammar for Tree-sitter-based syntax highlighting
 - [ ] **Publish pipeline** — VS Code Marketplace packaging for `@treelsp/vscode`, npm publishing for `treelsp` and `@treelsp/cli`
