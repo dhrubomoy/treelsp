@@ -130,7 +130,7 @@ Currently implementing in this order (see DESIGN.md § Implementation Order):
 3. ✅ Grammar codegen (emit grammar.js)
 4. ✅ CLI tooling (init, generate, build, watch)
 5. ✅ Runtime parser (Tree-sitter WASM loading, ASTNode wrapper)
-6. ⏳ Scope resolution
+6. ✅ Scope resolution (scope chain, resolver, workspace index)
 7. ⏳ LSP handlers
 8. ⏳ End-to-end validation
 

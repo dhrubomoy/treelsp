@@ -39,7 +39,7 @@ export class ASTNode {
    * Source text provider (optional - for efficient text access)
    * If not provided, uses syntaxNode.text which is slower
    */
-  private readonly sourceProvider?: SourceProvider;
+  private readonly sourceProvider: SourceProvider | undefined;
 
   constructor(syntaxNode: SyntaxNode, sourceProvider?: SourceProvider) {
     this.syntaxNode = syntaxNode;
