@@ -88,16 +88,15 @@ export class DocumentState {
 
   /**
    * Parse or reparse the document
-   * Uses incremental parsing if old tree exists
    *
-   * Tree-sitter handles incremental parsing automatically:
-   * - If this.tree exists, it's used as oldTree for incremental CST updates
-   * - CST changes are detected and reparsed efficiently
-   * - We rebuild the full AST wrapper (v1 strategy)
+   * V1 strategy: Always parse from scratch (no incremental CST reuse).
+   * Tree-sitter's incremental parsing requires calling tree.edit() with
+   * precise byte-offset edit info before passing the old tree. Without it,
+   * tree-sitter reuses old nodes at wrong positions, producing garbled ASTs.
+   * V2 will add proper edit tracking to enable incremental parsing.
    */
   private reparse(): void {
-    // Tree-sitter automatically does incremental CST parsing when oldTree is provided
-    const newTree = this.parser.parse(this.sourceText, this.tree ?? undefined);
+    const newTree = this.parser.parse(this.sourceText);
 
     // Delete old tree to free WASM memory
     if (this.tree) {
@@ -142,13 +141,8 @@ export class DocumentState {
       this.metadata.version++;
     }
 
-    // Tree-sitter does incremental CST parse automatically
-    // AST is fully rebuilt (v1 strategy)
+    // Full reparse (v1 strategy — no incremental CST, no tree.edit())
     this.reparse();
-
-    // NOTE: v1 does NOT use tree.getChangedRanges()
-    // Scope layer will do full rebuild
-    // v2 will use getChangedRanges() for incremental scope updates
   }
 
   /**
