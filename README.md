@@ -123,7 +123,7 @@ treelsp watch     # Watch mode - re-run generate + build
 
 ## Implementation Status
 
-Currently implementing in this order (see DESIGN.md § Implementation Order):
+All 8 implementation steps complete (see DESIGN.md § Implementation Order):
 
 1. ✅ Project setup and monorepo structure
 2. ✅ Definition layer types (grammar, semantic, validation, lsp)
@@ -131,8 +131,8 @@ Currently implementing in this order (see DESIGN.md § Implementation Order):
 4. ✅ CLI tooling (init, generate, build, watch)
 5. ✅ Runtime parser (Tree-sitter WASM loading, ASTNode wrapper)
 6. ✅ Scope resolution (scope chain, resolver, workspace index)
-7. ⏳ LSP handlers
-8. ⏳ End-to-end validation
+7. ✅ LSP handlers + server codegen
+8. ✅ End-to-end validation (mini-lang example)
 
 ## Key Design Decisions
 

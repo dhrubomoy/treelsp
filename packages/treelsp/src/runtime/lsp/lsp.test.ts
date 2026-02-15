@@ -262,7 +262,7 @@ describe('computeDiagnostics', () => {
       startLine: 0, startChar: 0, endLine: 0, endChar: 7,
     });
     // Wire parent
-    (refNode as any)[Symbol.for('treelsp.syntaxNode')].parent = (parentNode as any)[Symbol.for('treelsp.syntaxNode')];
+    (refNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
 
     const ref: Reference = {
       node: refNode, name: 'unknown', to: ['variable_decl'], resolved: null,
@@ -295,7 +295,7 @@ describe('computeDiagnostics', () => {
   it('should skip ignored unresolved references', () => {
     const refNode = createMockNode('identifier', 'x');
     const parentNode = createMockNode('name_ref', 'x');
-    (refNode as any)[Symbol.for('treelsp.syntaxNode')].parent = (parentNode as any)[Symbol.for('treelsp.syntaxNode')];
+    (refNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
 
     const ref: Reference = {
       node: refNode, name: 'x', to: ['variable_decl'], resolved: null,
@@ -330,9 +330,9 @@ describe('provideHover', () => {
       startLine: 0, startChar: 4, endLine: 0, endChar: 5,
     });
     const rootNode = createMockNode('program', 'let x = 1', {
-      namedChildren: [(nameNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(nameNode as any)._syntaxNode],
     });
-    (nameNode as any)[Symbol.for('treelsp.syntaxNode')].parent = (rootNode as any)[Symbol.for('treelsp.syntaxNode')];
+    (nameNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
 
     const decl: Declaration = {
       node: nameNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
@@ -372,9 +372,9 @@ describe('provideHover', () => {
     });
     const varDeclNode = createMockNode('variable_decl', 'let x = 1', {
       startLine: 0, startChar: 0, endLine: 0, endChar: 10,
-      namedChildren: [(nameNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(nameNode as any)._syntaxNode],
     });
-    (nameNode as any)[Symbol.for('treelsp.syntaxNode')].parent = (varDeclNode as any)[Symbol.for('treelsp.syntaxNode')];
+    (nameNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
 
     const decl: Declaration = {
       node: nameNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
@@ -397,7 +397,7 @@ describe('provideHover', () => {
     };
 
     const rootNode = createMockNode('program', 'let x = 1', {
-      namedChildren: [(nameNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(nameNode as any)._syntaxNode],
     });
     const document = createMockDocument(rootNode);
 
@@ -428,7 +428,7 @@ describe('provideDefinition', () => {
     };
 
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(refNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(refNode as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({
@@ -451,7 +451,7 @@ describe('provideDefinition', () => {
       startLine: 0, startChar: 0, endLine: 0, endChar: 3,
     });
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(node as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(node as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({ root: globalScope });
@@ -489,7 +489,7 @@ describe('provideReferences', () => {
     };
 
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(declNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(declNode as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({
@@ -510,7 +510,7 @@ describe('provideReferences', () => {
   it('should return empty for non-symbol', () => {
     const node = createMockNode('keyword', 'let');
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(node as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(node as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({ root: globalScope });
@@ -630,7 +630,7 @@ describe('provideRename', () => {
     };
 
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(declNode as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(declNode as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({
@@ -657,7 +657,7 @@ describe('provideRename', () => {
   it('should return null for non-symbol', () => {
     const node = createMockNode('keyword', 'let');
     const rootNode = createMockNode('program', '', {
-      namedChildren: [(node as any)[Symbol.for('treelsp.syntaxNode')]],
+      namedChildren: [(node as any)._syntaxNode],
     });
     const globalScope = new Scope('global', rootNode, null);
     const docScope = createMockDocScope({ root: globalScope });
@@ -680,7 +680,7 @@ describe('provideSymbols', () => {
     const varDeclNode = createMockNode('variable_decl', 'let myVar = 1', {
       startLine: 0, startChar: 0, endLine: 0, endChar: 13,
     });
-    (nameNode as any)[Symbol.for('treelsp.syntaxNode')].parent = (varDeclNode as any)[Symbol.for('treelsp.syntaxNode')];
+    (nameNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
 
     const decl: Declaration = {
       node: nameNode, name: 'myVar', visibility: 'private', declaredBy: 'variable_decl',

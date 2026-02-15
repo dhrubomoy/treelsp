@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "echo 'No build needed'",
-    "test": "echo 'No tests yet'",
+    "test": "vitest run",
     "lint": "eslint .",
     "clean": "rm -rf */generated"
   },
@@ -14,6 +14,7 @@
     "treelsp": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
   }
 }

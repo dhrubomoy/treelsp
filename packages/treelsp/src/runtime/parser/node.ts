@@ -48,9 +48,10 @@ export class ASTNode {
 
   /**
    * Internal accessor for other runtime modules
-   * Not exported to user code
+   * Not part of the public API — prefixed with underscore
+   * @internal
    */
-  get [Symbol.for('treelsp.syntaxNode')](): SyntaxNode {
+  get _syntaxNode(): SyntaxNode {
     return this.syntaxNode;
   }
 

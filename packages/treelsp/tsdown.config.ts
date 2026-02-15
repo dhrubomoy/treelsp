@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'codegen/index': 'src/codegen/index.ts',
+    'runtime/index': 'src/runtime/index.ts',
   },
   format: ['esm'],
   dts: true,
