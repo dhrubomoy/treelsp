@@ -13,6 +13,7 @@ import type { LspDefinition } from '../../definition/lsp.js';
 import type { Workspace } from '../scope/workspace.js';
 
 import {
+  findNodeAtPosition,
   findReferenceForNode,
   findDeclarationForNode,
   findScopeForNode,
@@ -77,15 +78,20 @@ function createMockNode(
     child: (i: number) => (options?.children ?? [])[i] ?? null,
     namedChild: (i: number) => (options?.namedChildren ?? [])[i] ?? null,
     descendantForIndex: function () { return this; },
-    descendantForPosition: function (pos: any) {
-      // Simple: check children first, then return self
+    descendantForPosition: function (pos: any): any {
+      // Recursively find the smallest node containing the position.
+      // End position is exclusive (matching tree-sitter semantics).
       for (const child of (options?.namedChildren ?? [])) {
         const childStart = child.startPosition;
         const childEnd = child.endPosition;
         if (
           (pos.row > childStart.row || (pos.row === childStart.row && pos.column >= childStart.column)) &&
-          (pos.row < childEnd.row || (pos.row === childEnd.row && pos.column <= childEnd.column))
+          (pos.row < childEnd.row || (pos.row === childEnd.row && pos.column < childEnd.column))
         ) {
+          // Recurse into child to find the smallest match
+          if (child.descendantForPosition) {
+            return child.descendantForPosition(pos);
+          }
           return child;
         }
       }
@@ -248,6 +254,81 @@ describe('LspContext', () => {
       const ctx = createLspContext(docScope, {} as unknown as Workspace, document, {});
       expect(ctx.typeOf(node)).toBeNull();
     });
+  });
+});
+
+// ========== findNodeAtPosition Tests ==========
+
+describe('findNodeAtPosition', () => {
+  it('should return leaf node when position is inside a token', () => {
+    // identifier "x" at (0, 10)-(0, 11), inside binary_expr (0, 10)-(0, 15)
+    const identNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 10, endLine: 0, endChar: 11,
+    });
+    const binaryNode = createMockNode('binary_expr', 'x + y', {
+      startLine: 0, startChar: 10, endLine: 0, endChar: 15,
+      namedChildren: [(identNode as any)._syntaxNode],
+    });
+    const rootNode = createMockNode('program', 'let sum = x + y;', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 16,
+      namedChildren: [(binaryNode as any)._syntaxNode],
+    });
+
+    // Position at start of "x" → should return identifier
+    const node = findNodeAtPosition(rootNode, { line: 0, character: 10 });
+    expect(node.type).toBe('identifier');
+    expect(node.text).toBe('x');
+  });
+
+  it('should fall back to previous character when position is at exclusive end of token', () => {
+    // identifier "x" at (0, 10)-(0, 11), inside binary_expr (0, 10)-(0, 15)
+    // Position 11 is past the identifier (whitespace) → tree-sitter returns binary_expr
+    // The fix should look one char back and find "x"
+    const identNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 10, endLine: 0, endChar: 11,
+    });
+    const binaryNode = createMockNode('binary_expr', 'x + y', {
+      startLine: 0, startChar: 10, endLine: 0, endChar: 15,
+      namedChildren: [(identNode as any)._syntaxNode],
+    });
+    const rootNode = createMockNode('program', 'let sum = x + y;', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 16,
+      namedChildren: [(binaryNode as any)._syntaxNode],
+    });
+
+    // Position at char 11 (past "x") → should still find "x" via fallback
+    const node = findNodeAtPosition(rootNode, { line: 0, character: 11 });
+    expect(node.type).toBe('identifier');
+    expect(node.text).toBe('x');
+  });
+
+  it('should not fall back when already on a leaf node', () => {
+    // Two adjacent identifiers: "x" at (0, 0)-(0, 1), "y" at (0, 1)-(0, 2)
+    const xNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const yNode = createMockNode('identifier', 'y', {
+      startLine: 0, startChar: 1, endLine: 0, endChar: 2,
+    });
+    const rootNode = createMockNode('program', 'xy', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 2,
+      namedChildren: [(xNode as any)._syntaxNode, (yNode as any)._syntaxNode],
+    });
+
+    // Position at char 1 hits "y" directly (leaf) → no fallback needed
+    const node = findNodeAtPosition(rootNode, { line: 0, character: 1 });
+    expect(node.type).toBe('identifier');
+    expect(node.text).toBe('y');
+  });
+
+  it('should not fall back at character 0', () => {
+    const rootNode = createMockNode('program', 'hello', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 5,
+    });
+
+    // Position at char 0 → can't go back, return whatever we get
+    const node = findNodeAtPosition(rootNode, { line: 0, character: 0 });
+    expect(node.type).toBe('program');
   });
 });
 

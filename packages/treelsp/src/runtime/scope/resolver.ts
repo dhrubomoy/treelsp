@@ -74,6 +74,9 @@ export function buildScopes(
   // All references (for resolution)
   const references: Reference[] = [];
 
+  // Track node IDs consumed as declaration name fields — these should not also be references
+  const declaredNodeIds = new Set<number>();
+
   // Context for custom resolvers
   const context: ResolutionContext = {
     scopeOf: (node) => {
@@ -104,7 +107,7 @@ export function buildScopes(
   nodeScopes.set(root.id, globalScope);
 
   // Walk tree to build scopes and register declarations
-  walkTree(root, globalScope, semantic, nodeScopes, references, context);
+  walkTree(root, globalScope, semantic, nodeScopes, references, context, declaredNodeIds);
 
   // Resolve all references
   for (const ref of references) {
@@ -131,7 +134,8 @@ function walkTree(
   semantic: SemanticDefinition,
   nodeScopes: Map<number, Scope>,
   references: Reference[],
-  context: ResolutionContext
+  context: ResolutionContext,
+  declaredNodeIds: Set<number>
 ): void {
   const rule = semantic[node.type];
 
@@ -144,13 +148,13 @@ function walkTree(
 
   // Process declarations and references
   if (rule) {
-    processDeclarations(node, rule, nodeScope, semantic, nodeScopes, context);
-    processReferences(node, rule, nodeScope, references, context);
+    processDeclarations(node, rule, nodeScope, semantic, nodeScopes, context, declaredNodeIds);
+    processReferences(node, rule, nodeScope, references, context, declaredNodeIds);
   }
 
   // Recursively walk children
   for (const child of node.namedChildren) {
-    walkTree(child, nodeScope, semantic, nodeScopes, references, context);
+    walkTree(child, nodeScope, semantic, nodeScopes, references, context, declaredNodeIds);
   }
 }
 
@@ -163,7 +167,8 @@ function processDeclarations(
   _scope: Scope,
   _semantic: SemanticDefinition,
   nodeScopes: Map<number, Scope>,
-  context: ResolutionContext
+  context: ResolutionContext,
+  declaredNodeIds: Set<number>
 ): void {
   if (!rule.declares) {
     return;
@@ -176,6 +181,9 @@ function processDeclarations(
   if (!nameNode) {
     return;
   }
+
+  // Track this node so it won't also be treated as a reference
+  declaredNodeIds.add(nameNode.id);
 
   const name = nameNode.text;
 
@@ -221,7 +229,8 @@ function processReferences(
   rule: SemanticRule,
   _scope: Scope,
   references: Reference[],
-  context: ResolutionContext
+  context: ResolutionContext,
+  declaredNodeIds: Set<number>
 ): void {
   if (!rule.references) {
     return;
@@ -231,6 +240,12 @@ function processReferences(
 
   // Get the name field (fall back to node itself for leaf/token nodes)
   const nameNode = node.field(descriptor.field) ?? node;
+
+  // Skip nodes already consumed as declaration names — they are not references
+  if (declaredNodeIds.has(nameNode.id)) {
+    return;
+  }
+
   const name = nameNode.text;
   const to = Array.isArray(descriptor.to) ? descriptor.to : [descriptor.to];
 

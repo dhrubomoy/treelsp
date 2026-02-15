@@ -68,6 +68,11 @@ export function createServer(definition: LanguageDefinition): LanguageService {
   function getDocScope(document: DocumentState) {
     const wsDoc = documents.get(document.uri);
     if (wsDoc) {
+      // If the workspace has a different DocumentState (e.g., recreated after a race),
+      // re-register so the scope matches the current AST.
+      if (wsDoc.document !== document) {
+        return documents.change(document);
+      }
       return wsDoc.scope;
     }
     // Auto-register if not already in workspace

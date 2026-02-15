@@ -71,17 +71,28 @@ export function startStdioServer(options: StdioServerOptions): void {
   const textDocuments = new TextDocuments(TextDocument);
   const service = createServer(definition);
   const documentStates = new Map<string, DocumentState>();
+  // Promise cache prevents duplicate WASM init calls when concurrent requests
+  // arrive before the first createDocumentState completes.
+  const pendingInits = new Map<string, Promise<DocumentState>>();
 
   async function getDocumentState(textDoc: TextDocument): Promise<DocumentState> {
-    let state = documentStates.get(textDoc.uri);
-    if (!state) {
-      state = await createDocumentState(wasmPath, {
+    const existing = documentStates.get(textDoc.uri);
+    if (existing) return existing;
+
+    // Deduplicate: reuse in-flight init for the same URI
+    let promise = pendingInits.get(textDoc.uri);
+    if (!promise) {
+      promise = createDocumentState(wasmPath, {
         uri: textDoc.uri,
         version: textDoc.version,
         languageId: langId,
       }, textDoc.getText());
-      documentStates.set(textDoc.uri, state);
+      pendingInits.set(textDoc.uri, promise);
     }
+
+    const state = await promise;
+    documentStates.set(textDoc.uri, state);
+    pendingInits.delete(textDoc.uri);
     return state;
   }
 
@@ -128,16 +139,19 @@ export function startStdioServer(options: StdioServerOptions): void {
 
   // Document open
   textDocuments.onDidOpen(async (event) => {
+    connection.console.log(`[open] ${event.document.uri} v${event.document.version}`);
     await validateDocument(event.document);
+    connection.console.log(`[open] done ${event.document.uri}`);
   });
 
   // Document change
   textDocuments.onDidChangeContent(async (event) => {
-    const state = documentStates.get(event.document.uri);
-    if (state) {
-      state.update(event.document.getText(), event.document.version);
-      service.documents.change(state);
-    }
+    connection.console.log(`[change] ${event.document.uri} v${event.document.version}`);
+    // Await state creation — prevents silently dropping updates when
+    // WASM init from onDidOpen hasn't completed yet.
+    const state = await getDocumentState(event.document);
+    state.update(event.document.getText(), event.document.version);
+    service.documents.change(state);
     await validateDocument(event.document);
   });
 
@@ -168,20 +182,44 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Definition
   connection.onDefinition(async (params) => {
     const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return null;
-    const state = await getDocumentState(textDoc);
-    const result = service.provideDefinition(state, params.position);
-    if (!result) return null;
-    return { uri: result.uri, range: result.range };
+    if (!textDoc) {
+      connection.console.log(`[definition] no textDoc for ${params.textDocument.uri}`);
+      return null;
+    }
+    try {
+      const state = await getDocumentState(textDoc);
+      const pos = params.position;
+      const node = state.root.descendantForPosition(pos);
+      connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
+      const result = service.provideDefinition(state, params.position);
+      connection.console.log(`[definition] result=${result ? `${result.uri} ${result.range.start.line}:${result.range.start.character}` : 'null'}`);
+      if (!result) return null;
+      return { uri: result.uri, range: result.range };
+    } catch (e) {
+      connection.console.error(`[definition] error: ${e}`);
+      return null;
+    }
   });
 
   // References
   connection.onReferences(async (params) => {
     const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return [];
-    const state = await getDocumentState(textDoc);
-    const results = service.provideReferences(state, params.position);
-    return results.map(r => ({ uri: r.uri, range: r.range }));
+    if (!textDoc) {
+      connection.console.log(`[references] no textDoc for ${params.textDocument.uri}`);
+      return [];
+    }
+    try {
+      const state = await getDocumentState(textDoc);
+      const pos = params.position;
+      const node = state.root.descendantForPosition(pos);
+      connection.console.log(`[references] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
+      const results = service.provideReferences(state, params.position);
+      connection.console.log(`[references] found ${results.length} references`);
+      return results.map(r => ({ uri: r.uri, range: r.range }));
+    } catch (e) {
+      connection.console.error(`[references] error: ${e}`);
+      return [];
+    }
   });
 
   // Completion

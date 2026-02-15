@@ -41,9 +41,24 @@ export function createLspContext(
 
 /**
  * Find the smallest named node at a position
+ *
+ * When the cursor is at the exclusive end of a token (e.g., right edge of an
+ * identifier), tree-sitter returns the parent node because that position falls
+ * in whitespace. In that case, look one character back to find the token the
+ * user likely intended.
  */
 export function findNodeAtPosition(root: ASTNode, position: Position): ASTNode {
-  return root.descendantForPosition(position);
+  const node = root.descendantForPosition(position);
+  if (node.namedChildCount > 0 && position.character > 0) {
+    const prev = root.descendantForPosition({
+      line: position.line,
+      character: position.character - 1,
+    });
+    if (prev.namedChildCount === 0) {
+      return prev;
+    }
+  }
+  return node;
 }
 
 /**
