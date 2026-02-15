@@ -14,11 +14,12 @@ treelsp is a Langium-style LSP generator that uses Tree-sitter as its parsing ba
 - TypeScript throughout — no new DSLs to learn
 
 **Incremental parsing**
-- v1 strategy: keystroke → Tree-sitter incremental reparse → full AST rebuild → full scope rebuild
-- Tree-sitter's CST reparse is incremental automatically — no work needed
+- v1 strategy: keystroke → full Tree-sitter reparse → full AST rebuild → full scope rebuild
+- v1 does NOT pass the old tree to `parser.parse()` — full reparse every time
+  (passing old tree requires `tree.edit()` with byte-offset edit info, deferred to v2)
 - AST and scope are full recompute on every change — simple and correct
 - Internal `DocumentState.update()` method owns all three steps behind a clean boundary
-- This boundary is intentionally designed so v2 can swap in incremental AST + scope
+- This boundary is intentionally designed so v2 can swap in incremental CST + AST + scope
   without any breaking changes to the public API
 - Invalidation-based incremental (using tree.getChangedRanges()) is the v2 target
 - Full persistent data structures (rust-analyzer style) explicitly out of scope
@@ -62,7 +63,9 @@ src/
   codegen/
     grammar.ts               # emit grammar.js for Tree-sitter
     ast-types.ts             # emit typed AST node interfaces
-    server.ts                # emit LSP server entry point
+    server.ts                # emit treelsp.json manifest
+    highlights.ts            # emit queries/highlights.scm
+    locals.ts                # emit queries/locals.scm
   runtime/
     parser/
       node.ts                # ASTNode wrapper
@@ -82,6 +85,7 @@ src/
       references.ts
       rename.ts
       symbols.ts
+      semantic-tokens.ts     # semantic token encoding for syntax highlighting
   cli/
     generate.ts
     build.ts
@@ -635,6 +639,8 @@ These LSP features work with zero configuration once the semantic layer is defin
 | Keyword completion | Automatic from grammar + `$keywords` |
 | Hover on references | Automatic — resolves to declaration, calls `hover` |
 | Unresolved reference diagnostics | Automatic from `onUnresolved` policy |
+| Syntax highlighting | Automatic — keywords, operators, declarations, literals classified from grammar + semantic |
+| Semantic tokens | Automatic — LSP `textDocument/semanticTokens/full` from grammar + semantic + `completionKind` |
 | Document sync + incremental reparse | Automatic via Tree-sitter |
 
 ---
@@ -751,19 +757,37 @@ From one `defineLanguage(...)` call, treelsp generates:
 ```
 generated/
   grammar.js          ← Tree-sitter grammar (input to tree-sitter CLI)
-  grammar.wasm        ← compiled parser
-  ast.ts              ← typed AST node interfaces
-  server.ts           ← LSP server entry point
+  grammar.wasm        ← compiled parser (via tree-sitter generate + compile)
+  ast.ts              ← typed AST node interfaces with field() overloads
+  treelsp.json        ← manifest for VS Code extension discovery
   queries/
-    highlights.scm    ← syntax highlighting queries
-    locals.scm        ← scope queries
+    highlights.scm    ← syntax highlighting queries (Tree-sitter format)
+    locals.scm        ← scope queries (Tree-sitter format)
 ```
+
+### Generated Queries
+
+**highlights.scm** — maps grammar elements to highlight captures:
+- Alphabetic string literals (e.g. `"let"`, `"fn"`) and `$keywords` → `@keyword`
+- Bracket-like strings → `@punctuation.bracket`
+- Delimiters (`;`, `,`, `.`, `:`) → `@punctuation.delimiter`
+- Remaining string literals → `@operator`
+- Declaration name fields → capture based on `completionKind` (Variable→`@variable`, Function→`@function`, Class→`@type`)
+- Token rules classified by name heuristic (`number`→`@number`, `string`→`@string`, `comment`→`@comment`)
+- Word rule (e.g. `identifier`) → `@variable` (fallback)
+
+**locals.scm** — maps semantic rules to scope queries:
+- Rules with `scope` → `@local.scope`
+- Rules with `declares` → `@local.definition` (with field pattern)
+- Rules with `references` → `@local.reference`
+
+These queries are used by Tree-sitter editors (Neovim, Helix, Zed) for native syntax highlighting and scope resolution. For VS Code, the LSP semantic tokens handler provides equivalent highlighting via the LSP protocol.
 
 ### CLI Commands
 
 ```bash
 treelsp init          # scaffold a new language project
-treelsp generate      # generate grammar.js + ast.ts + server.ts
+treelsp generate      # generate grammar.js + ast.ts + queries + treelsp.json
 treelsp build         # compile grammar.js → grammar.wasm
 treelsp watch         # re-run generate + build on grammar.ts changes
 ```
@@ -772,16 +796,25 @@ treelsp watch         # re-run generate + build on grammar.ts changes
 
 ## Implementation Order
 
-Build in this order — each step is testable before the next:
+Built in this order — each step was testable before the next:
 
-1. `src/definition/` — types and builder functions (no logic, just data structures)
-2. `src/codegen/grammar.ts` — emit `grammar.js` from definition
-3. `@treelsp/cli generate` — wire codegen, call tree-sitter CLI to compile WASM
-4. `src/runtime/parser/` — Tree-sitter WASM loading, ASTNode wrapper
-5. `src/runtime/scope/` — scope chain, resolver, workspace index
-6. `src/runtime/lsp/` — LSP handlers one by one (diagnostics first, then hover, definition, references, completion)
-7. `src/codegen/server.ts` — emit LSP server entry point
-8. `examples/mini-lang/` — validate full pipeline end to end
+1. ✅ `src/definition/` — types and builder functions (no logic, just data structures)
+2. ✅ `src/codegen/grammar.ts` — emit `grammar.js` from definition
+3. ✅ `@treelsp/cli generate` — wire codegen, call tree-sitter CLI to compile WASM
+4. ✅ `src/runtime/parser/` — Tree-sitter WASM loading, ASTNode wrapper
+5. ✅ `src/runtime/scope/` — scope chain, resolver, workspace index
+6. ✅ `src/runtime/lsp/` — LSP handlers (diagnostics, hover, definition, references, completion, rename, symbols, semantic tokens)
+7. ✅ `src/codegen/server.ts` — manifest + `src/server/index.ts` — stdio transport
+8. ✅ `examples/mini-lang/` — validate full pipeline end to end
+9. ✅ `@treelsp/vscode` — VS Code extension with dynamic language discovery
+10. ✅ `src/codegen/highlights.ts` + `locals.ts` — Tree-sitter query generation
+11. ✅ `src/runtime/lsp/semantic-tokens.ts` — LSP semantic tokens for VS Code highlighting
+
+### Remaining V1 Work
+
+- Dynamic language contribution in VS Code extension (register languages from treelsp.json at runtime)
+- `extras` declaration (whitespace, comments) in grammar definition
+- Publish pipeline (npm + VS Code Marketplace)
 
 ---
 
@@ -863,8 +896,6 @@ This section tells Claude Code what is settled and what still needs discussion.
 ### Open Questions — Ask Before Implementing
 
 **Grammar layer**
-- Should `r.token()` accept both a regex and a rule reference, or regex only?
-  Current assumption: regex only for terminals, `r.rule()` for rule references
 - How should extras (whitespace, comments) be declared?
   Tree-sitter uses an `extras` array at the grammar level — not yet designed
 
@@ -874,25 +905,12 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Should `ctx.typeOf()` exist in v1 at all, or is it purely a v2 concern?
   Currently referenced in LSP and validation contexts but not defined
 
-**Codegen**
-- Should `generated/` be committed to the repo or gitignored?
-  Recommendation: gitignored, always regenerated — but not decided
-- Should `grammar.wasm` be committed?
-  Leaning yes (it's a build artifact users need, like a lock file) — but not decided
-- What happens when `treelsp generate` is run and `grammar.js` already exists with manual edits?
-  Overwrite silently? Warn? Require `--force`? Not decided
-
 **Runtime**
-- How should parse errors from Tree-sitter surface as LSP diagnostics?
-  Tree-sitter uses ERROR nodes and MISSING nodes — mapping strategy not yet designed
 - Should the runtime support multiple language grammars in one LSP server (e.g. embedded languages)?
   Not designed — Tree-sitter supports this natively but it's complex
 
-**Testing**
-- What does a unit test for a grammar rule look like?
-  Tree-sitter has a corpus test format — should treelsp expose this or wrap it?
-- Should there be snapshot tests for generated `grammar.js` output?
-
-**VS Code extension**
-- Should `@treelsp/vscode` be a generic extension that any treelsp language can plug into,
-  or a scaffold users copy and customise? Not decided
+**Publishing**
+- npm package scope and naming convention
+- VS Code Marketplace publisher setup
+- Should `grammar.wasm` be committed to user repos?
+  Leaning yes (it's a build artifact users need, like a lock file) — but not decided
