@@ -24,8 +24,22 @@ import { provideHover } from './hover.js';
 import { provideDefinition } from './definition.js';
 import { provideReferences } from './references.js';
 import { provideCompletion } from './completion.js';
-import { provideRename } from './rename.js';
+import { prepareRename, provideRename } from './rename.js';
 import { provideSymbols } from './symbols.js';
+import { DocumentManager } from './documents.js';
+import { createServer } from './server.js';
+import type { LanguageDefinition } from '../../definition/index.js';
+import type { ValidationDefinition } from '../../definition/validation.js';
+
+function createMockLanguageDef(overrides?: Partial<LanguageDefinition>): LanguageDefinition {
+  return {
+    name: 'test',
+    fileExtensions: ['.test'],
+    entry: 'program',
+    grammar: {} as any,
+    ...overrides,
+  };
+}
 
 // ========== Mock Helpers ==========
 
@@ -865,5 +879,1225 @@ describe('provideSymbols', () => {
     const symbols = provideSymbols(docScope, lsp);
     expect(symbols).toHaveLength(1);
     expect(symbols[0]?.name).toBe('Variables');
+  });
+});
+
+// ========== Diagnostics: Parse Errors ==========
+
+describe('computeDiagnostics — parse errors', () => {
+  it('should report missing nodes', () => {
+    const missingNode = createMockNode('identifier', '', {
+      startLine: 0, startChar: 5, endLine: 0, endChar: 5,
+      isMissing: true,
+    });
+    const rootNode = createMockNode('program', 'let  ', {
+      children: [(missingNode as any)._syntaxNode],
+      namedChildren: [(missingNode as any)._syntaxNode],
+    });
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const diagnostics = computeDiagnostics(document, docScope, {});
+
+    const missing = diagnostics.find(d => d.code === 'missing-node');
+    expect(missing).toBeDefined();
+    expect(missing?.severity).toBe('error');
+    expect(missing?.message).toContain('Missing');
+  });
+
+  it('should report leaf error nodes', () => {
+    const errorNode = createMockNode('ERROR', '???', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 3,
+      isError: true,
+    });
+    const rootNode = createMockNode('program', '???', {
+      children: [(errorNode as any)._syntaxNode],
+      namedChildren: [(errorNode as any)._syntaxNode],
+    });
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const diagnostics = computeDiagnostics(document, docScope, {});
+
+    const syntaxError = diagnostics.find(d => d.code === 'syntax-error');
+    expect(syntaxError).toBeDefined();
+    expect(syntaxError?.severity).toBe('error');
+    expect(syntaxError?.message).toBe('Syntax error');
+  });
+
+  it('should not duplicate errors for parent nodes that have error children', () => {
+    const leafError = createMockNode('ERROR', '!', {
+      startLine: 0, startChar: 3, endLine: 0, endChar: 4,
+      isError: true,
+    });
+    const parentError = createMockNode('ERROR', 'x !', {
+      startLine: 0, startChar: 2, endLine: 0, endChar: 4,
+      isError: true,
+      children: [(leafError as any)._syntaxNode],
+    });
+    const rootNode = createMockNode('program', '  x !', {
+      children: [(parentError as any)._syntaxNode],
+      namedChildren: [(parentError as any)._syntaxNode],
+    });
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const diagnostics = computeDiagnostics(document, docScope, {});
+
+    // Only the leaf error should produce a diagnostic, not the parent
+    const syntaxErrors = diagnostics.filter(d => d.code === 'syntax-error');
+    expect(syntaxErrors).toHaveLength(1);
+    expect(syntaxErrors[0]?.range.start.character).toBe(3);
+  });
+});
+
+// ========== Diagnostics: Unresolved Reference Variants ==========
+
+describe('computeDiagnostics — unresolved reference variants', () => {
+  it('should report warning severity when onUnresolved is "warning"', () => {
+    const refNode = createMockNode('identifier', 'x');
+    const parentNode = createMockNode('name_ref', 'x');
+    (refNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
+
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: null,
+    };
+
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const semantic: SemanticDefinition = {
+      name_ref: {
+        references: { field: 'name', to: 'variable_decl', onUnresolved: 'warning' },
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, semantic);
+
+    const unresolved = diagnostics.find(d => d.code === 'unresolved-reference');
+    expect(unresolved).toBeDefined();
+    expect(unresolved?.severity).toBe('warning');
+  });
+
+  it('should skip optional references', () => {
+    const refNode = createMockNode('identifier', 'x');
+    const parentNode = createMockNode('name_ref', 'x');
+    (refNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
+
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: null,
+    };
+
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const semantic: SemanticDefinition = {
+      name_ref: {
+        references: { field: 'name', to: 'variable_decl', optional: true },
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, semantic);
+
+    expect(diagnostics.filter(d => d.code === 'unresolved-reference')).toHaveLength(0);
+  });
+
+  it('should use custom $unresolved message', () => {
+    const refNode = createMockNode('identifier', 'foo');
+    const parentNode = createMockNode('name_ref', 'foo');
+    (refNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
+
+    const ref: Reference = {
+      node: refNode, name: 'foo', to: ['variable_decl'], resolved: null,
+    };
+
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const semantic: SemanticDefinition = {
+      name_ref: {
+        references: { field: 'name', to: 'variable_decl' },
+      },
+    };
+
+    const lsp = {
+      $unresolved: () => 'Did you mean bar?',
+    } as LspDefinition;
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, semantic, lsp);
+
+    const unresolved = diagnostics.find(d => d.code === 'unresolved-reference');
+    expect(unresolved?.message).toBe('Did you mean bar?');
+  });
+
+  it('should skip already-resolved references', () => {
+    const declNode = createMockNode('identifier', 'x');
+    const refNode = createMockNode('identifier', 'x');
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {});
+
+    expect(diagnostics.filter(d => d.code === 'unresolved-reference')).toHaveLength(0);
+  });
+});
+
+// ========== Diagnostics: Custom Validation ==========
+
+describe('computeDiagnostics — custom validation', () => {
+  it('should collect errors from validators', () => {
+    const nameNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 5,
+      namedChildren: [(nameNode as any)._syntaxNode],
+    });
+    (nameNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'let x', {
+      namedChildren: [(varDeclNode as any)._syntaxNode],
+    });
+    (varDeclNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+    nodeScopes.set(varDeclNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const validation: ValidationDefinition = {
+      variable_decl: (node: any, ctx: any) => {
+        ctx.error(node, 'Variables must be uppercase', { code: 'uppercase-var' });
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    const custom = diagnostics.find(d => d.code === 'uppercase-var');
+    expect(custom).toBeDefined();
+    expect(custom?.severity).toBe('error');
+    expect(custom?.message).toBe('Variables must be uppercase');
+  });
+
+  it('should support all severity levels from validators', () => {
+    const node = createMockNode('some_node', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'x', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    (node as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({ root: globalScope, nodeScopes });
+
+    const validation: ValidationDefinition = {
+      some_node: (n: any, ctx: any) => {
+        ctx.error(n, 'err');
+        ctx.warning(n, 'warn');
+        ctx.info(n, 'inf');
+        ctx.hint(n, 'hnt');
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    const severities = diagnostics.map(d => d.severity);
+    expect(severities).toContain('error');
+    expect(severities).toContain('warning');
+    expect(severities).toContain('info');
+    expect(severities).toContain('hint');
+  });
+
+  it('should support array of validators per rule', () => {
+    const node = createMockNode('rule_a', 'a', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'a', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    (node as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({ root: globalScope, nodeScopes });
+
+    const validation: ValidationDefinition = {
+      rule_a: [
+        (n: any, ctx: any) => { ctx.error(n, 'v1'); },
+        (n: any, ctx: any) => { ctx.warning(n, 'v2'); },
+      ],
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]?.message).toBe('v1');
+    expect(diagnostics[1]?.message).toBe('v2');
+  });
+
+  it('should support diagnostic options with "at" target node', () => {
+    const nameNode = createMockNode('identifier', 'bad', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 7,
+    });
+    const declNode = createMockNode('variable_decl', 'let bad', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 7,
+      namedChildren: [(nameNode as any)._syntaxNode],
+      fields: { name: (nameNode as any)._syntaxNode },
+    });
+    (nameNode as any)._syntaxNode.parent = (declNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'let bad', {
+      namedChildren: [(declNode as any)._syntaxNode],
+    });
+    (declNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({ root: globalScope, nodeScopes });
+
+    const validation: ValidationDefinition = {
+      variable_decl: (node: any, ctx: any) => {
+        const name = node.field('name');
+        ctx.error(node, 'bad name', { at: name, code: 'bad-name' });
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    const diag = diagnostics.find(d => d.code === 'bad-name');
+    expect(diag).toBeDefined();
+    // "at" redirects the diagnostic range to the name node
+    expect(diag?.range.start.character).toBe(4);
+  });
+});
+
+// ========== DocumentManager Tests ==========
+
+describe('DocumentManager', () => {
+  function makeSimpleDocAndScope() {
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode, 'file:///a.ml');
+    return { rootNode, document };
+  }
+
+  it('should open a document and return scope', () => {
+    const mgr = new DocumentManager({});
+    const { document } = makeSimpleDocAndScope();
+
+    const scope = mgr.open(document);
+    expect(scope).toBeDefined();
+    expect(scope.root).toBeDefined();
+  });
+
+  it('should get a document after opening', () => {
+    const mgr = new DocumentManager({});
+    const { document } = makeSimpleDocAndScope();
+
+    mgr.open(document);
+    const wsDoc = mgr.get('file:///a.ml');
+    expect(wsDoc).not.toBeNull();
+    expect(wsDoc?.document).toBe(document);
+  });
+
+  it('should return null for unknown URI', () => {
+    const mgr = new DocumentManager({});
+    expect(mgr.get('file:///nonexistent.ml')).toBeNull();
+  });
+
+  it('should handle change (re-scope)', () => {
+    const mgr = new DocumentManager({});
+    const { document } = makeSimpleDocAndScope();
+
+    mgr.open(document);
+    const scope2 = mgr.change(document);
+    expect(scope2).toBeDefined();
+  });
+
+  it('should close a document', () => {
+    const mgr = new DocumentManager({});
+    const { document } = makeSimpleDocAndScope();
+
+    mgr.open(document);
+    mgr.close('file:///a.ml');
+    expect(mgr.get('file:///a.ml')).toBeNull();
+  });
+
+  it('should list all documents', () => {
+    const mgr = new DocumentManager({});
+    const root1 = createMockNode('program', '');
+    const root2 = createMockNode('program', '');
+    const doc1 = createMockDocument(root1, 'file:///a.ml');
+    const doc2 = createMockDocument(root2, 'file:///b.ml');
+
+    mgr.open(doc1);
+    mgr.open(doc2);
+
+    expect(mgr.getAllDocuments()).toHaveLength(2);
+  });
+
+  it('should clear all documents', () => {
+    const mgr = new DocumentManager({});
+    const root1 = createMockNode('program', '');
+    const doc1 = createMockDocument(root1, 'file:///a.ml');
+    mgr.open(doc1);
+    mgr.clear();
+
+    expect(mgr.getAllDocuments()).toHaveLength(0);
+    expect(mgr.get('file:///a.ml')).toBeNull();
+  });
+
+  it('should expose workspace', () => {
+    const mgr = new DocumentManager({});
+    expect(mgr.getWorkspace()).toBeDefined();
+  });
+});
+
+// ========== createServer Tests ==========
+
+describe('createServer', () => {
+  it('should auto-register unknown documents via getDocScope', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode, 'file:///auto.ml');
+
+    // Calling any handler should auto-register the document
+    const diagnostics = server.computeDiagnostics(document);
+    expect(diagnostics).toEqual([]);
+
+    // Document should now be in workspace
+    expect(server.documents.get('file:///auto.ml')).not.toBeNull();
+  });
+
+  it('should re-register stale document when DocumentState changes', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode1 = createMockNode('program', 'v1');
+    const doc1 = createMockDocument(rootNode1, 'file:///stale.ml');
+
+    server.documents.open(doc1);
+
+    // Create a new document state for same URI
+    const rootNode2 = createMockNode('program', 'v2');
+    const doc2 = createMockDocument(rootNode2, 'file:///stale.ml');
+
+    // Handler should detect stale and re-register
+    const diagnostics = server.computeDiagnostics(doc2);
+    expect(diagnostics).toBeDefined();
+
+    // The workspace should now have doc2
+    const wsDoc = server.documents.get('file:///stale.ml');
+    expect(wsDoc?.document).toBe(doc2);
+  });
+
+  it('should return cached scope for same document', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode, 'file:///cached.ml');
+
+    server.documents.open(document);
+
+    // Multiple calls should reuse scope, not re-register
+    server.computeDiagnostics(document);
+    server.computeDiagnostics(document);
+    expect(server.documents.get('file:///cached.ml')).not.toBeNull();
+  });
+
+  it('should wire all handler methods', () => {
+    const server = createServer(createMockLanguageDef());
+
+    expect(typeof server.computeDiagnostics).toBe('function');
+    expect(typeof server.provideHover).toBe('function');
+    expect(typeof server.provideDefinition).toBe('function');
+    expect(typeof server.provideReferences).toBe('function');
+    expect(typeof server.provideCompletion).toBe('function');
+    expect(typeof server.prepareRename).toBe('function');
+    expect(typeof server.provideRename).toBe('function');
+    expect(typeof server.provideSymbols).toBe('function');
+    expect(typeof server.provideSemanticTokensFull).toBe('function');
+    expect(server.documents).toBeDefined();
+  });
+
+  it('should pass through to provideHover handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideHover(document, { line: 0, character: 0 });
+    // Root node → null
+    expect(result).toBeNull();
+  });
+
+  it('should pass through to provideDefinition handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideDefinition(document, { line: 0, character: 0 });
+    expect(result).toBeNull();
+  });
+
+  it('should pass through to provideReferences handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideReferences(document, { line: 0, character: 0 });
+    expect(result).toEqual([]);
+  });
+
+  it('should pass through to provideCompletion handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideCompletion(document, { line: 0, character: 0 });
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('should pass through to prepareRename handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.prepareRename(document, { line: 0, character: 0 });
+    expect(result).toBeNull();
+  });
+
+  it('should pass through to provideRename handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideRename(document, { line: 0, character: 0 }, 'newName');
+    expect(result).toBeNull();
+  });
+
+  it('should pass through to provideSymbols handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideSymbols(document);
+    expect(result).toEqual([]);
+  });
+
+  it('should pass through to provideSemanticTokensFull handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideSemanticTokensFull(document);
+    expect(result).toBeDefined();
+    expect(Array.isArray(result.data)).toBe(true);
+  });
+});
+
+// ========== prepareRename Tests ==========
+
+describe('prepareRename', () => {
+  it('should return range and placeholder for a reference', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+    const document = createMockDocument(rootNode);
+
+    const result = prepareRename(document, { line: 1, character: 0 }, docScope);
+
+    expect(result).not.toBeNull();
+    expect(result?.placeholder).toBe('x');
+    expect(result?.range.start.line).toBe(1);
+  });
+
+  it('should return range and placeholder for a declaration', () => {
+    const declNode = createMockNode('identifier', 'myVar', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 9,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'myVar', visibility: 'private', declaredBy: 'variable_decl',
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(declNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      declarations: [decl],
+    });
+    const document = createMockDocument(rootNode);
+
+    const result = prepareRename(document, { line: 0, character: 4 }, docScope);
+
+    expect(result).not.toBeNull();
+    expect(result?.placeholder).toBe('myVar');
+  });
+
+  it('should return null for non-symbol position', () => {
+    const rootNode = createMockNode('program', 'hello');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const result = prepareRename(document, { line: 0, character: 0 }, docScope);
+    expect(result).toBeNull();
+  });
+});
+
+// ========== Cross-file Rename ==========
+
+describe('provideRename — cross-file', () => {
+  it('should rename across workspace documents', () => {
+    // Declare x in doc1, reference x in doc2
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'public', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode1 = createMockNode('program', 'let x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 5,
+      namedChildren: [(declNode as any)._syntaxNode],
+    });
+    const rootNode2 = createMockNode('program', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+
+    const docScope1 = createMockDocScope({
+      root: new Scope('global', rootNode1, null),
+      declarations: [decl],
+    });
+    const docScope2 = createMockDocScope({
+      root: new Scope('global', rootNode2, null),
+      references: [ref],
+    });
+
+    const doc1 = createMockDocument(rootNode1, 'file:///a.ml');
+    const doc2 = createMockDocument(rootNode2, 'file:///b.ml');
+
+    const workspace: Workspace = {
+      getAllDocuments: () => [
+        { document: doc1, scope: docScope1 },
+        { document: doc2, scope: docScope2 },
+      ],
+      lookupPublic: () => [],
+      getAllPublicDeclarations: () => [decl],
+    } as unknown as Workspace;
+
+    // Rename from declaration
+    const result = provideRename(
+      doc1, { line: 0, character: 4 }, 'newX', docScope1, workspace
+    );
+
+    expect(result).not.toBeNull();
+    // Should have edits in both files
+    const editsA = result?.changes['file:///a.ml'];
+    const editsB = result?.changes['file:///b.ml'];
+    expect(editsA).toBeDefined();
+    expect(editsB).toBeDefined();
+    expect(editsA?.every(e => e.newText === 'newX')).toBe(true);
+    expect(editsB?.every(e => e.newText === 'newX')).toBe(true);
+  });
+});
+
+// ========== Cross-file Definition ==========
+
+describe('provideDefinition — cross-file', () => {
+  it('should resolve definition from another document', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 5, startChar: 4, endLine: 5, endChar: 5,
+    });
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'public', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode2 = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+
+    const docScope1 = createMockDocScope({
+      root: new Scope('global', null, null),
+      declarations: [decl],
+    });
+    const docScope2 = createMockDocScope({
+      root: new Scope('global', rootNode2, null),
+      references: [ref],
+    });
+
+    const doc1 = createMockDocument(createMockNode('program', ''), 'file:///a.ml');
+    const doc2 = createMockDocument(rootNode2, 'file:///b.ml');
+
+    const workspace: Workspace = {
+      getAllDocuments: () => [
+        { document: doc1, scope: docScope1 },
+        { document: doc2, scope: docScope2 },
+      ],
+    } as unknown as Workspace;
+
+    const result = provideDefinition(doc2, { line: 0, character: 0 }, docScope2, workspace);
+
+    expect(result).not.toBeNull();
+    expect(result?.uri).toBe('file:///a.ml');
+    expect(result?.range.start.line).toBe(5);
+  });
+});
+
+// ========== Cross-file References ==========
+
+describe('provideReferences — cross-file', () => {
+  it('should collect references from all workspace documents', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const refNode1 = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+    const refNode2 = createMockNode('identifier', 'x', {
+      startLine: 2, startChar: 0, endLine: 2, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'public', declaredBy: 'variable_decl',
+    };
+    const ref1: Reference = {
+      node: refNode1, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+    const ref2: Reference = {
+      node: refNode2, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode1 = createMockNode('program', '', {
+      namedChildren: [(declNode as any)._syntaxNode],
+    });
+
+    const docScope1 = createMockDocScope({
+      root: new Scope('global', rootNode1, null),
+      declarations: [decl],
+      references: [ref1],
+    });
+    const docScope2 = createMockDocScope({
+      root: new Scope('global', null, null),
+      references: [ref2],
+    });
+
+    const doc1 = createMockDocument(rootNode1, 'file:///a.ml');
+    const doc2 = createMockDocument(createMockNode('program', ''), 'file:///b.ml');
+
+    const workspace: Workspace = {
+      getAllDocuments: () => [
+        { document: doc1, scope: docScope1 },
+        { document: doc2, scope: docScope2 },
+      ],
+    } as unknown as Workspace;
+
+    const result = provideReferences(
+      doc1, { line: 0, character: 4 }, docScope1, workspace
+    );
+
+    expect(result).toHaveLength(2);
+    const uris = result.map(r => r.uri);
+    expect(uris).toContain('file:///a.ml');
+    expect(uris).toContain('file:///b.ml');
+  });
+
+  it('should find references when starting from a reference node', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+      declarations: [decl],
+    });
+    const document = createMockDocument(rootNode);
+
+    // Query from the reference position (not declaration)
+    const result = provideReferences(
+      document, { line: 1, character: 0 }, docScope
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.range.start.line).toBe(1);
+  });
+});
+
+// ========== Hover: Reference → Declaration ==========
+
+describe('provideHover — reference paths', () => {
+  it('should show declaration hover when hovering over a reference', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let x = 1', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 10,
+    });
+    (declNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+    const document = createMockDocument(rootNode);
+
+    const result = provideHover(
+      document, { line: 1, character: 0 }, docScope, {}
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.contents).toContain('variable_decl');
+    expect(result?.contents).toContain('x');
+  });
+
+  it('should return null for unresolved reference hover', () => {
+    const refNode = createMockNode('identifier', 'unknown', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 7,
+    });
+
+    const ref: Reference = {
+      node: refNode, name: 'unknown', to: ['variable_decl'], resolved: null,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+    const document = createMockDocument(rootNode);
+
+    const result = provideHover(
+      document, { line: 0, character: 0 }, docScope, {}
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('should use custom hover for reference via declaration type', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let x = 1', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 10,
+    });
+    (declNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const lsp: LspDefinition = {
+      variable_decl: {
+        hover: () => '**type**: number',
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideHover(
+      document, { line: 1, character: 0 }, docScope, {}, lsp
+    );
+
+    expect(result?.contents).toBe('**type**: number');
+  });
+
+  it('should fall through to default when custom hover returns null', () => {
+    const declNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let x = 1', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 10,
+    });
+    (declNode as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+
+    const refNode = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 1,
+    });
+
+    const decl: Declaration = {
+      node: declNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'x', to: ['variable_decl'], resolved: decl,
+    };
+
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+    });
+
+    const lsp: LspDefinition = {
+      variable_decl: {
+        hover: () => null,
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideHover(
+      document, { line: 1, character: 0 }, docScope, {}, lsp
+    );
+
+    // Falls through to default hover
+    expect(result).not.toBeNull();
+    expect(result?.contents).toContain('variable_decl');
+    expect(result?.contents).toContain('x');
+  });
+
+  it('should return null when no reference or declaration found', () => {
+    const identNode = createMockNode('identifier', 'nothing', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 7,
+    });
+    const rootNode = createMockNode('program', 'nothing', {
+      namedChildren: [(identNode as any)._syntaxNode],
+    });
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const result = provideHover(
+      document, { line: 0, character: 0 }, docScope, {}
+    );
+
+    expect(result).toBeNull();
+  });
+});
+
+// ========== Completion: Custom Handlers ==========
+
+describe('provideCompletion — custom handlers', () => {
+  it('should use custom complete handler returning array', () => {
+    const identNode = createMockNode('expression', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'x', {
+      namedChildren: [(identNode as any)._syntaxNode],
+    });
+    (identNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const lsp: LspDefinition = {
+      expression: {
+        complete: () => [
+          { label: 'custom1' },
+          { label: 'custom2' },
+        ],
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}, lsp
+    );
+
+    const labels = result.map(i => i.label);
+    expect(labels).toContain('custom1');
+    expect(labels).toContain('custom2');
+  });
+
+  it('should support replace mode from custom handler', () => {
+    const identNode = createMockNode('expression', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'x', {
+      namedChildren: [(identNode as any)._syntaxNode],
+    });
+    (identNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const xNode = createMockNode('identifier', 'shouldNotAppear');
+    globalScope.declare('shouldNotAppear', xNode, 'variable_decl', 'private');
+
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const lsp: LspDefinition = {
+      expression: {
+        complete: () => ({
+          items: [{ label: 'only_this' }],
+          replace: true,
+        }),
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}, lsp
+    );
+
+    // Replace mode: only custom items, no scope-based completions
+    expect(result).toHaveLength(1);
+    expect(result[0]?.label).toBe('only_this');
+  });
+
+  it('should deduplicate completion items by label', () => {
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+
+    const xNode1 = createMockNode('identifier', 'x');
+    const xNode2 = createMockNode('identifier', 'x');
+    globalScope.declare('x', xNode1, 'variable_decl', 'private');
+    globalScope.declare('x', xNode2, 'function_decl', 'private');
+
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}
+    );
+
+    // Should only have one "x" entry (deduplication by label)
+    const xItems = result.filter(i => i.label === 'x');
+    expect(xItems).toHaveLength(1);
+  });
+
+  it('should include workspace public declarations', () => {
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const pubDeclNode = createMockNode('identifier', 'publicFn');
+    const workspace: Workspace = {
+      getAllDocuments: () => [],
+      getAllPublicDeclarations: () => [
+        { node: pubDeclNode, name: 'publicFn', visibility: 'public' as const, declaredBy: 'function_decl' },
+      ],
+      lookupPublic: () => [],
+    } as unknown as Workspace;
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}, undefined, workspace
+    );
+
+    const labels = result.map(i => i.label);
+    expect(labels).toContain('publicFn');
+  });
+
+  it('should walk up node tree for custom handler', () => {
+    const leafNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const parentNode = createMockNode('expression', 'x + 1', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 5,
+      namedChildren: [(leafNode as any)._syntaxNode],
+    });
+    (leafNode as any)._syntaxNode.parent = (parentNode as any)._syntaxNode;
+    const rootNode = createMockNode('program', 'x + 1', {
+      namedChildren: [(parentNode as any)._syntaxNode],
+    });
+    (parentNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const lsp: LspDefinition = {
+      // Handler on parent type, not leaf type
+      expression: {
+        complete: () => [{ label: 'fromParent' }],
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}, lsp
+    );
+
+    const labels = result.map(i => i.label);
+    expect(labels).toContain('fromParent');
+  });
+
+  it('should include keyword documentation', () => {
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    const lsp = {
+      $keywords: {
+        'fn': { detail: 'Declare function', documentation: 'Defines a new function' },
+      },
+    } as LspDefinition;
+
+    const document = createMockDocument(rootNode);
+    const result = provideCompletion(
+      document, { line: 0, character: 0 }, docScope, {}, lsp
+    );
+
+    const fnItem = result.find(i => i.label === 'fn');
+    expect(fnItem?.detail).toBe('Declare function');
+    expect(fnItem?.documentation).toBe('Defines a new function');
+    expect(fnItem?.kind).toBe('Keyword');
   });
 });
