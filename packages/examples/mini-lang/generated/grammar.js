@@ -8,11 +8,18 @@ module.exports = grammar({
 
   word: $ => $.identifier,
 
+  extras: $ => [
+    /\s+/,
+    $.comment
+  ],
+
   rules: {
     program: $ => repeat($.statement),
 
     statement: $ => choice(
       $.variable_decl,
+      $.function_decl,
+      $.return_statement,
       $.expr_statement
     ),
 
@@ -24,6 +31,37 @@ module.exports = grammar({
       ";"
     ),
 
+    function_decl: $ => seq(
+      "fn",
+      field("name", $.identifier),
+      "(",
+      field("params", optional($.parameter_list)),
+      ")",
+      field("body", $.block)
+    ),
+
+    parameter_list: $ => seq(
+      $.parameter,
+      repeat(seq(
+        ",",
+        $.parameter
+      ))
+    ),
+
+    parameter: $ => field("name", $.identifier),
+
+    block: $ => seq(
+      "{",
+      repeat($.statement),
+      "}"
+    ),
+
+    return_statement: $ => seq(
+      "return",
+      field("value", $.expression),
+      ";"
+    ),
+
     expr_statement: $ => seq(
       field("expr", $.expression),
       ";"
@@ -31,8 +69,25 @@ module.exports = grammar({
 
     expression: $ => choice(
       $.binary_expr,
+      $.call_expr,
       $.identifier,
-      $.number
+      $.number,
+      $.string_literal
+    ),
+
+    call_expr: $ => prec(3, seq(
+      field("callee", $.identifier),
+      "(",
+      field("args", optional($.argument_list)),
+      ")"
+    )),
+
+    argument_list: $ => seq(
+      $.expression,
+      repeat(seq(
+        ",",
+        $.expression
+      ))
     ),
 
     binary_expr: $ => choice(
@@ -60,6 +115,10 @@ module.exports = grammar({
 
     identifier: $ => token(/[a-zA-Z_][a-zA-Z0-9_]*/),
 
-    number: $ => token(/[0-9]+/)
+    number: $ => token(/[0-9]+/),
+
+    string_literal: $ => token(/"[^"]*"/),
+
+    comment: $ => token(/\/\/.*/)
   }
 });

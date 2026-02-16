@@ -4,5 +4,9 @@
   "fileExtensions": [
     ".mini"
   ],
-  "server": "./server.bundle.cjs"
+  "server": "./server.bundle.cjs",
+  "queries": {
+    "highlights": "./queries/highlights.scm",
+    "locals": "./queries/locals.scm"
+  }
 }

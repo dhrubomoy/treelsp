@@ -19,6 +19,31 @@ export interface VariableDeclNode extends ASTNode {
   field(name: 'value'): ExpressionNode;
 }
 
+export interface FunctionDeclNode extends ASTNode {
+  readonly type: 'function_decl';
+  field(name: 'name'): IdentifierNode;
+  field(name: 'params'): ParameterListNode;
+  field(name: 'body'): BlockNode;
+}
+
+export interface ParameterListNode extends ASTNode {
+  readonly type: 'parameter_list';
+}
+
+export interface ParameterNode extends ASTNode {
+  readonly type: 'parameter';
+  field(name: 'name'): IdentifierNode;
+}
+
+export interface BlockNode extends ASTNode {
+  readonly type: 'block';
+}
+
+export interface ReturnStatementNode extends ASTNode {
+  readonly type: 'return_statement';
+  field(name: 'value'): ExpressionNode;
+}
+
 export interface ExprStatementNode extends ASTNode {
   readonly type: 'expr_statement';
   field(name: 'expr'): ExpressionNode;
@@ -26,6 +51,16 @@ export interface ExprStatementNode extends ASTNode {
 
 export interface ExpressionNode extends ASTNode {
   readonly type: 'expression';
+}
+
+export interface CallExprNode extends ASTNode {
+  readonly type: 'call_expr';
+  field(name: 'callee'): IdentifierNode;
+  field(name: 'args'): ArgumentListNode;
+}
+
+export interface ArgumentListNode extends ASTNode {
+  readonly type: 'argument_list';
 }
 
 export interface BinaryExprNode extends ASTNode {
@@ -43,15 +78,32 @@ export interface NumberNode extends ASTNode {
   readonly type: 'number';
 }
 
+export interface StringLiteralNode extends ASTNode {
+  readonly type: 'string_literal';
+}
+
+export interface CommentNode extends ASTNode {
+  readonly type: 'comment';
+}
+
 export type MiniLangNode =
   | ProgramNode
   | StatementNode
   | VariableDeclNode
+  | FunctionDeclNode
+  | ParameterListNode
+  | ParameterNode
+  | BlockNode
+  | ReturnStatementNode
   | ExprStatementNode
   | ExpressionNode
+  | CallExprNode
+  | ArgumentListNode
   | BinaryExprNode
   | IdentifierNode
-  | NumberNode;
+  | NumberNode
+  | StringLiteralNode
+  | CommentNode;
 
 /** Type guard for checking node type */
 export function isNodeType<K extends MiniLangNode['type']>(

@@ -45,9 +45,9 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(doc.hasErrors).toBe(false);
     });
 
-    it('parses all 5 variable declarations', () => {
+    it('parses all 8 variable declarations', () => {
       const varDecls = doc.root.descendantsOfType('variable_decl');
-      expect(varDecls).toHaveLength(5);
+      expect(varDecls).toHaveLength(8);
     });
 
     it('variable_decl has name and value fields', () => {
@@ -57,13 +57,50 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(first.field('value')!.text).toBe('10');
     });
 
+    it('parses string literal values', () => {
+      const varDecls = doc.root.descendantsOfType('variable_decl');
+      const greeting = varDecls.find(v => v.field('name')!.text === 'greeting');
+      expect(greeting).toBeDefined();
+      expect(greeting!.field('value')!.text).toBe('"hello world"');
+    });
+
     it('parses binary expressions with correct structure', () => {
-      // "let sum = x + y;" — value is an expression wrapping binary_expr
       const binaryExprs = doc.root.descendantsOfType('binary_expr');
       expect(binaryExprs.length).toBeGreaterThan(0);
       const sumExpr = binaryExprs[0]!;
       expect(sumExpr.field('left')).not.toBeNull();
       expect(sumExpr.field('right')).not.toBeNull();
+    });
+
+    it('parses function declarations', () => {
+      const fnDecls = doc.root.descendantsOfType('function_decl');
+      expect(fnDecls).toHaveLength(2);
+      const addFn = fnDecls[0]!;
+      expect(addFn.field('name')!.text).toBe('add');
+      expect(addFn.field('params')).not.toBeNull();
+      expect(addFn.field('body')).not.toBeNull();
+    });
+
+    it('parses function parameters', () => {
+      const params = doc.root.descendantsOfType('parameter');
+      // add(a, b) + greet(name) = 3 params
+      expect(params).toHaveLength(3);
+      expect(params[0]!.field('name')!.text).toBe('a');
+      expect(params[1]!.field('name')!.text).toBe('b');
+      expect(params[2]!.field('name')!.text).toBe('name');
+    });
+
+    it('parses function call expressions', () => {
+      const calls = doc.root.descendantsOfType('call_expr');
+      expect(calls).toHaveLength(2);
+      expect(calls[0]!.field('callee')!.text).toBe('add');
+      expect(calls[1]!.field('callee')!.text).toBe('greet');
+    });
+
+    it('parses return statements', () => {
+      const returns = doc.root.descendantsOfType('return_statement');
+      expect(returns).toHaveLength(2);
+      expect(returns[0]!.field('value')).not.toBeNull();
     });
 
     it('detects parse errors in malformed input', async () => {
@@ -104,7 +141,7 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
     it('computes diagnostics without errors for valid file', () => {
       const diags = service.computeDiagnostics(doc);
       expect(Array.isArray(diags)).toBe(true);
-      // All references in test.mini should resolve (x, y used after declaration)
+      // All references in test.mini should resolve
       const errors = diags.filter(d => d.severity === 'error');
       expect(errors).toHaveLength(0);
     });
@@ -128,20 +165,21 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
     });
 
     it('provides completions with declared variables and keywords', () => {
-      // Position inside an expression — should suggest declared variables
       const completions = service.provideCompletion(
         doc,
         { line: 4, character: 10 },
       );
       expect(completions.length).toBeGreaterThan(0);
       const labels = completions.map(c => c.label);
-      // Should include the 'let' keyword
       expect(labels).toContain('let');
+      expect(labels).toContain('fn');
+      expect(labels).toContain('return');
     });
 
     it('provides document symbols for all declarations', () => {
       const symbols = service.provideSymbols(doc);
-      expect(symbols.length).toBeGreaterThanOrEqual(5);
+      // 7 variables + 2 functions = 9 declarations with symbols
+      expect(symbols.length).toBeGreaterThanOrEqual(9);
     });
 
     it('provides references for declared variable', () => {

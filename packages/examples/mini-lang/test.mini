@@ -3,3 +3,16 @@ let y = 20;
 let sum = x + y;
 let product = x * y;
 let complex = x + y * 2 - 5;
+
+let greeting = "hello world";
+
+fn add(a, b) {
+  return a + b;
+}
+
+fn greet(name) {
+  return "hi";
+}
+
+let result = add(x, y);
+let msg = greet(greeting);
