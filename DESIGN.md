@@ -830,10 +830,7 @@ Built in this order — each step was testable before the next:
 10. ✅ `src/codegen/highlights.ts` + `locals.ts` — Tree-sitter query generation
 11. ✅ `src/runtime/lsp/semantic-tokens.ts` — LSP semantic tokens for VS Code highlighting
 12. ✅ `extras` declaration — whitespace and comments in grammar definition
-
-### Remaining V1 Work
-
-- Publish pipeline (npm + VS Code Marketplace)
+13. ✅ Publish pipeline — changesets, GitHub Actions CI/CD, npm + VS Code Marketplace
 
 ---
 
@@ -911,6 +908,13 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Incremental parsing: Tree-sitter handles CST incrementally; AST + scope is full recompute in v1,
   designed for incremental upgrade in v2 without API changes
 
+**Publishing**
+- Changesets for version management and changelogs
+- `treelsp` and `@treelsp/cli` linked versioning (bump together)
+- GitHub Actions: CI on push/PR (lint, build, test), release via changesets/action
+- npm publish for `treelsp` and `@treelsp/cli`, VS Code Marketplace for `@treelsp/vscode`
+- Secrets required: `NPM_TOKEN`, `VSCE_PAT`
+
 ---
 
 ### Open Questions — Ask Before Implementing
@@ -925,8 +929,6 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Should the runtime support multiple language grammars in one LSP server (e.g. embedded languages)?
   Not designed — Tree-sitter supports this natively but it's complex
 
-**Publishing**
-- npm package scope and naming convention
-- VS Code Marketplace publisher setup
+**User projects**
 - Should `grammar.wasm` be committed to user repos?
   Leaning yes (it's a build artifact users need, like a lock file) — but not decided

@@ -42,8 +42,15 @@
     "parser",
     "typescript"
   ],
-  "author": "",
+  "author": "Dhrubomoy Das Gupta",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhrubomoy/treelsp.git",
+    "directory": "packages/treelsp"
+  },
+  "homepage": "https://github.com/dhrubomoy/treelsp#readme",
+  "bugs": "https://github.com/dhrubomoy/treelsp/issues",
   "dependencies": {
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",

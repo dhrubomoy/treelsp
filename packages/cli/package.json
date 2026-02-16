@@ -23,8 +23,15 @@
     "tree-sitter",
     "codegen"
   ],
-  "author": "",
+  "author": "Dhrubo Moy",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhrubomoy/treelsp.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/dhrubomoy/treelsp#readme",
+  "bugs": "https://github.com/dhrubomoy/treelsp/issues",
   "dependencies": {
     "chokidar": "^4.0.3",
     "commander": "^12.1.0",

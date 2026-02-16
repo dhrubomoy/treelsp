@@ -43,10 +43,18 @@
       }
     ]
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhrubomoy/treelsp.git",
+    "directory": "packages/vscode"
+  },
+  "homepage": "https://github.com/dhrubomoy/treelsp#readme",
+  "bugs": "https://github.com/dhrubomoy/treelsp/issues",
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
     "package": "vsce package",
+    "publish:vscode": "vsce publish",
     "lint": "eslint src",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
