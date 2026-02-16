@@ -1,0 +1,8 @@
+{
+  "name": "MiniLang",
+  "languageId": "minilang",
+  "fileExtensions": [
+    ".mini"
+  ],
+  "server": "./server.bundle.cjs"
+}

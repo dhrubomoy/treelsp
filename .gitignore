@@ -5,5 +5,3 @@ dist
 .idea
 *.tsbuildinfo
 coverage
-generated/
-*.wasm
