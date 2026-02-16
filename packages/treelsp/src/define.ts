@@ -20,8 +20,8 @@ export function defineLanguage<
     fileExtensions: string[];
     entry: Extract<keyof Grammar, string>;
     word?: Extract<keyof Grammar, string>;
-    conflicts?: (r: RuleBuilder<Extract<keyof Grammar, string>>) => unknown[][];
-    extras?: (r: RuleBuilder<Extract<keyof Grammar, string>>) => unknown[];
+    conflicts?: (r: RuleBuilder<string>) => unknown[][];
+    extras?: (r: RuleBuilder<string>) => unknown[];
     grammar: Grammar;
     semantic?: SemanticDefinition<Extract<keyof Grammar, string>>;
     validation?: ValidationDefinition<Extract<keyof Grammar, string>>;
