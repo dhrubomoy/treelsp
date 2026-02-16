@@ -242,7 +242,7 @@ describe('generateGrammar', () => {
       fileExtensions: ['.extras'],
       entry: 'program',
 
-      extras: r => [/\s+/],
+      extras: _r => [/\s+/],
 
       grammar: {
         program: r => r.repeat(r.rule('identifier')),
@@ -261,6 +261,7 @@ describe('generateGrammar', () => {
       fileExtensions: ['.extras'],
       entry: 'program',
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       extras: r => [/\s+/, r.rule('comment')],
 
       grammar: {

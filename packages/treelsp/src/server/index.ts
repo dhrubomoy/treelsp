@@ -110,8 +110,8 @@ export function startStdioServer(options: StdioServerOptions): void {
   async function validateDocument(textDoc: TextDocument): Promise<void> {
     const state = await getDocumentState(textDoc);
     const diagnostics = service.computeDiagnostics(state);
-    connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`)}`)
-    connection.sendDiagnostics({
+    connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`).join(', ')}`)
+    void connection.sendDiagnostics({
       uri: textDoc.uri,
       version: textDoc.version,
       diagnostics: diagnostics.map(d => {
@@ -175,7 +175,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       state.dispose();
       documentStates.delete(event.document.uri);
     }
-    connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
+    void connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
   });
 
   // Hover
@@ -208,7 +208,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       if (!result) return null;
       return { uri: result.uri, range: result.range };
     } catch (e) {
-      connection.console.error(`[definition] error: ${e}`);
+      connection.console.error(`[definition] error: ${String(e)}`);
       return null;
     }
   });
@@ -229,7 +229,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       connection.console.log(`[references] found ${results.length} references`);
       return results.map(r => ({ uri: r.uri, range: r.range }));
     } catch (e) {
-      connection.console.error(`[references] error: ${e}`);
+      connection.console.error(`[references] error: ${String(e)}`);
       return [];
     }
   });

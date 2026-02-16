@@ -43,8 +43,7 @@ const languageCache: LanguageCache = {};
  */
 function detectPlatform(): Platform {
   // Use globalThis to check for browser globals without requiring DOM types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const global = globalThis as any;
+  const global = globalThis as Record<string, unknown>;
 
   // Check for browser globals
   if (typeof global.window !== 'undefined' && typeof global.document !== 'undefined') {

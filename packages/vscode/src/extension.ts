@@ -36,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const manifests = await discoverManifests();
 
   // Register languages in package.json if needed (requires reload)
-  const needsReload = await syncLanguageContributions(manifests.map(m => m.manifest), context);
+  const needsReload = syncLanguageContributions(manifests.map(m => m.manifest), context);
   if (needsReload) {
     const action = await vscode.window.showInformationMessage(
       'treelsp discovered new languages. Reload window to activate language support.',
@@ -95,15 +95,15 @@ export async function deactivate(): Promise<void> {
  * VS Code only recognizes languages declared in package.json — there's no dynamic API.
  * Returns true if package.json was updated (reload needed).
  */
-async function syncLanguageContributions(
+function syncLanguageContributions(
   manifests: TreelspManifest[],
   context: vscode.ExtensionContext
-): Promise<boolean> {
+): boolean {
   const pkgPath = path.join(context.extensionPath, 'package.json');
 
   let pkg: Record<string, unknown>;
   try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as Record<string, unknown>;
   } catch {
     return false;
   }

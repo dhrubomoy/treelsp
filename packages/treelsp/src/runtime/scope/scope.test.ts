@@ -39,6 +39,7 @@ function createMockNode(type: string, text: string): ASTNode {
     toString: () => text,
   } as any;
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   return new ASTNode(mockSyntaxNode);
 }
 
