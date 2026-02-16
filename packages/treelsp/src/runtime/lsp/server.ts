@@ -102,7 +102,7 @@ export function createServer(definition: LanguageDefinition): LanguageService {
 
     provideDefinition(document: DocumentState, position: Position): DefinitionResult | null {
       const docScope = getDocScope(document);
-      return provideDefinition(document, position, docScope);
+      return provideDefinition(document, position, docScope, documents.getWorkspace());
     },
 
     provideReferences(document: DocumentState, position: Position): ReferenceLocation[] {

@@ -306,5 +306,16 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       const labels = completions.map(c => c.label);
       expect(labels).toContain('globalVar');
     });
+
+    it('go-to-definition navigates to the declaring file', () => {
+      // In test2.mini, globalVar is at line 0, character 8-17
+      const defResult = service.provideDefinition(
+        doc2,
+        { line: 0, character: 10 },
+      );
+      expect(defResult).not.toBeNull();
+      // Should point to test.mini, NOT test2.mini
+      expect(defResult!.uri).toBe('file:///test.mini');
+    });
   });
 });

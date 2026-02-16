@@ -11752,7 +11752,7 @@ ${stack}`);
   }
 });
 
-// ../../treelsp/dist/runtime-C2mAa-nQ.js
+// ../../treelsp/dist/runtime-DOrtE1ta.js
 var import_web_tree_sitter = __toESM(require_tree_sitter(), 1);
 var ASTNode = class ASTNode2 {
   /**
@@ -12893,12 +12893,20 @@ function provideHover(document2, position, docScope, semantic, lsp, workspace) {
   }
   return null;
 }
-function provideDefinition(document2, position, docScope) {
+function provideDefinition(document2, position, docScope, workspace) {
   const node = findNodeAtPosition(document2.root, position);
   const ref = findReferenceForNode(node, docScope);
   if (!ref?.resolved) return null;
+  let uri = document2.uri;
+  if (workspace) for (const wsDoc of workspace.getAllDocuments()) {
+    const match = wsDoc.scope.declarations.some((d) => d.node.id === ref.resolved.node.id);
+    if (match) {
+      uri = wsDoc.document.uri;
+      break;
+    }
+  }
   return {
-    uri: document2.uri,
+    uri,
     range: nodeToRange(ref.resolved.node)
   };
 }
@@ -13312,7 +13320,7 @@ function createServer(definition) {
     },
     provideDefinition(document2, position) {
       const docScope = getDocScope(document2);
-      return provideDefinition(document2, position, docScope);
+      return provideDefinition(document2, position, docScope, documents.getWorkspace());
     },
     provideReferences(document2, position) {
       const docScope = getDocScope(document2);
