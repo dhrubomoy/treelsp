@@ -29,6 +29,9 @@ export interface LanguageDefinition<T extends string = string> {
   /** Explicit GLR conflict declarations */
   conflicts?: (r: any) => any[][];
 
+  /** Extra tokens that can appear anywhere (e.g., whitespace, comments) */
+  extras?: (r: any) => any[];
+
   /** Grammar layer - rule definitions */
   grammar: GrammarDefinition<T>;
 

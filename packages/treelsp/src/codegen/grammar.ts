@@ -268,6 +268,27 @@ export function generateGrammar<T extends string>(
     conflictsLine = `  conflicts: $ => [\n${conflictsSerialized}\n  ],\n\n`;
   }
 
+  // Generate extras config
+  let extrasLine = '';
+  if (definition.extras) {
+    const rawExtras = definition.extras(builder);
+    const extrasSerialized = rawExtras
+      .map((item: unknown) => {
+        // Normalize raw values (regex, string) that aren't already RuleNodes
+        let node: RuleNode;
+        if (typeof item === 'string') {
+          node = { type: 'string', value: item };
+        } else if (item instanceof RegExp) {
+          node = { type: 'regex', value: item };
+        } else {
+          node = item as RuleNode;
+        }
+        return `    ${serializeNode(node, 2)}`;
+      })
+      .join(',\n');
+    extrasLine = `  extras: $ => [\n${extrasSerialized}\n  ],\n\n`;
+  }
+
   // Generate full grammar.js
   return `/**
  * Tree-sitter grammar for ${definition.name}
@@ -277,7 +298,7 @@ export function generateGrammar<T extends string>(
 module.exports = grammar({
   name: ${JSON.stringify(definition.name)},
 
-${wordLine}${conflictsLine}  rules: {
+${wordLine}${conflictsLine}${extrasLine}  rules: {
 ${rulesCode}
   }
 });

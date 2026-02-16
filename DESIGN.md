@@ -271,6 +271,26 @@ grammar: {
 },
 ```
 
+### Extras — Implicit Tokens
+
+`extras` declares tokens that can appear anywhere without being listed in every rule. Most commonly whitespace and comments.
+
+```typescript
+export default defineLanguage({
+  name: 'MyLang',
+  extras: r => [/\s+/, r.rule('comment')],
+  grammar: {
+    comment: r => r.token(/\/\/.*/),
+    // ...
+  },
+});
+```
+
+- Same builder function pattern as `conflicts` — top-level field, returns array
+- Type-safe: `r.rule('comment')` autocompletes from grammar rule names
+- If omitted, Tree-sitter defaults to `[/\s/]` (whitespace only)
+- Maps directly to Tree-sitter's `extras: $ => [...]` in grammar.js
+
 ### Ambiguity Resolution — Tree-sitter's Model
 
 Tree-sitter is a GLR parser. It forks parse state and pursues multiple interpretations simultaneously, resolving ambiguity through:
@@ -809,11 +829,10 @@ Built in this order — each step was testable before the next:
 9. ✅ `@treelsp/vscode` — VS Code extension with dynamic language discovery
 10. ✅ `src/codegen/highlights.ts` + `locals.ts` — Tree-sitter query generation
 11. ✅ `src/runtime/lsp/semantic-tokens.ts` — LSP semantic tokens for VS Code highlighting
+12. ✅ `extras` declaration — whitespace and comments in grammar definition
 
 ### Remaining V1 Work
 
-- Dynamic language contribution in VS Code extension (register languages from treelsp.json at runtime)
-- `extras` declaration (whitespace, comments) in grammar definition
 - Publish pipeline (npm + VS Code Marketplace)
 
 ---
@@ -849,7 +868,8 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Builder method names match Tree-sitter exactly: `seq`, `choice`, `optional`, `repeat`, `repeat1`, `field`, `prec`, `prec.left`, `prec.right`, `prec.dynamic`, `token`, `alias`
 - `r.rule('name')` instead of `$.name` — same concept, type-safe, no Proxy needed
 - No custom DSL — TypeScript is the grammar format
-- `word` and `conflicts` are top-level keys in `defineLanguage`, not inside `grammar`
+- `word`, `conflicts`, and `extras` are top-level keys in `defineLanguage`, not inside `grammar`
+- `extras` follows the same builder function pattern as `conflicts`: `extras: r => [/\s+/, r.rule('comment')]`
 - Left recursion is handled natively by Tree-sitter's GLR parser — no special abstraction needed
 - Tree-sitter's precedence model is exposed directly — no `r.binary()` helper abstraction
 
@@ -894,10 +914,6 @@ This section tells Claude Code what is settled and what still needs discussion.
 ---
 
 ### Open Questions — Ask Before Implementing
-
-**Grammar layer**
-- How should extras (whitespace, comments) be declared?
-  Tree-sitter uses an `extras` array at the grammar level — not yet designed
 
 **Semantic layer**
 - Multi-field / qualified names (e.g. `Foo.Bar`) — punted to v2, but what does the v1 API need to avoid closing that door?

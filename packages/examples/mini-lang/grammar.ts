@@ -11,6 +11,8 @@ export default defineLanguage({
   entry: 'program',
   word: 'identifier',
 
+  extras: r => [/\s+/, r.rule('comment')],
+
   grammar: {
     // Program is a sequence of statements
     program: r => r.repeat(r.rule('statement')),
@@ -70,6 +72,7 @@ export default defineLanguage({
     // Tokens
     identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
     number: r => r.token(/[0-9]+/),
+    comment: r => r.token(/\/\/.*/),
   },
 
   semantic: {

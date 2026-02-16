@@ -21,6 +21,7 @@ export function defineLanguage<
     entry: Extract<keyof Grammar, string>;
     word?: Extract<keyof Grammar, string>;
     conflicts?: (r: RuleBuilder<Extract<keyof Grammar, string>>) => unknown[][];
+    extras?: (r: RuleBuilder<Extract<keyof Grammar, string>>) => unknown[];
     grammar: Grammar;
     semantic?: SemanticDefinition<Extract<keyof Grammar, string>>;
     validation?: ValidationDefinition<Extract<keyof Grammar, string>>;

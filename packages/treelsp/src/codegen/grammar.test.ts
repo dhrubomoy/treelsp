@@ -236,6 +236,61 @@ describe('generateGrammar', () => {
     expect(result).toContain('$.rule2');
   });
 
+  it('generates extras config with regex', () => {
+    const definition: LanguageDefinition<'program' | 'identifier'> = {
+      name: 'ExtrasRegexTest',
+      fileExtensions: ['.extras'],
+      entry: 'program',
+
+      extras: r => [/\s+/],
+
+      grammar: {
+        program: r => r.repeat(r.rule('identifier')),
+        identifier: r => r.token(/[a-zA-Z]+/),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).toContain('extras: $ => [');
+    expect(result).toContain('/\\s+/');
+  });
+
+  it('generates extras config with rule reference', () => {
+    const definition: LanguageDefinition<'program' | 'identifier' | 'comment'> = {
+      name: 'ExtrasRuleTest',
+      fileExtensions: ['.extras'],
+      entry: 'program',
+
+      extras: r => [/\s+/, r.rule('comment')],
+
+      grammar: {
+        program: r => r.repeat(r.rule('identifier')),
+        identifier: r => r.token(/[a-zA-Z]+/),
+        comment: r => r.token(/\/\/.*/),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).toContain('extras: $ => [');
+    expect(result).toContain('/\\s+/');
+    expect(result).toContain('$.comment');
+  });
+
+  it('does not emit extras when not specified', () => {
+    const definition: LanguageDefinition<'program'> = {
+      name: 'NoExtrasTest',
+      fileExtensions: ['.noextras'],
+      entry: 'program',
+
+      grammar: {
+        program: r => r.token('x'),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).not.toContain('extras');
+  });
+
   it('handles optional, repeat, and repeat1', () => {
     const definition: LanguageDefinition<'program' | 'item'> = {
       name: 'RepeatTest',
