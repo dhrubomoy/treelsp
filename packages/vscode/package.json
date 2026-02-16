@@ -3,6 +3,7 @@
   "displayName": "treelsp",
   "description": "VS Code extension for treelsp-based language servers",
   "version": "0.0.1",
+  "private": true,
   "publisher": "treelsp",
   "engines": {
     "vscode": "^1.80.0"
