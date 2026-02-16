@@ -35,8 +35,8 @@ const mockTextDocuments = {
 };
 
 vi.mock('vscode-languageserver/lib/node/main.js', () => ({
-  createConnection: vi.fn(() => mockConnection),
-  TextDocuments: vi.fn(() => mockTextDocuments),
+  createConnection: vi.fn(function () { return mockConnection; }),
+  TextDocuments: vi.fn(function () { return mockTextDocuments; }),
   ProposedFeatures: { all: [] },
   TextDocumentSyncKind: { Full: 1 },
   DiagnosticSeverity: { Error: 1, Warning: 2, Information: 3, Hint: 4 },
