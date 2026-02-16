@@ -5,6 +5,7 @@
 "fn" @keyword
 "let" @keyword
 "return" @keyword
+"var" @keyword
 
 ; Operators
 "*" @operator
@@ -24,6 +25,7 @@
 ";" @punctuation.delimiter
 
 ; Declarations
+(global_var_decl name: (identifier) @variable)
 (variable_decl name: (identifier) @variable)
 (function_decl name: (identifier) @function)
 (parameter name: (identifier) @variable)

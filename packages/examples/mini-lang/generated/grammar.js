@@ -17,10 +17,19 @@ module.exports = grammar({
     program: $ => repeat($.statement),
 
     statement: $ => choice(
+      $.global_var_decl,
       $.variable_decl,
       $.function_decl,
       $.return_statement,
       $.expr_statement
+    ),
+
+    global_var_decl: $ => seq(
+      "var",
+      field("name", $.identifier),
+      "=",
+      field("value", $.expression),
+      ";"
     ),
 
     variable_decl: $ => seq(

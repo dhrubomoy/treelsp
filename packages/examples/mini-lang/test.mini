@@ -16,3 +16,4 @@ fn greet(name) {
 
 let result = add(x, y);
 let msg = greet(greeting);
+var globalVar = "global";

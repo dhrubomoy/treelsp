@@ -11752,7 +11752,7 @@ ${stack}`);
   }
 });
 
-// ../../treelsp/dist/runtime-CnCx2QS4.js
+// ../../treelsp/dist/runtime-C2mAa-nQ.js
 var import_web_tree_sitter = __toESM(require_tree_sitter(), 1);
 var ASTNode = class ASTNode2 {
   /**
@@ -12314,7 +12314,7 @@ var Scope = class {
     return `Scope(${this.kind}, ${nodeType}, ${declCount} decls)`;
   }
 };
-function buildScopes(document2, semantic) {
+function buildScopes(document2, semantic, workspace) {
   const root = document2.root;
   const nodeScopes = /* @__PURE__ */ new Map();
   const references = [];
@@ -12340,7 +12340,7 @@ function buildScopes(document2, semantic) {
   const globalScope = new Scope("global", root, null);
   nodeScopes.set(root.id, globalScope);
   walkTree(root, globalScope, semantic, nodeScopes, references, context, declaredNodeIds);
-  for (const ref of references) ref.resolved = resolveReference(ref, context);
+  for (const ref of references) ref.resolved = resolveReference(ref, context, workspace);
   const declarations = context.getDeclarations();
   return {
     root: globalScope,
@@ -12353,8 +12353,12 @@ function walkTree(node, currentScope, semantic, nodeScopes, references, context,
   const rule = semantic[node.type];
   let nodeScope = currentScope;
   if (rule?.scope) {
-    nodeScope = new Scope(rule.scope, node, currentScope);
-    nodeScopes.set(node.id, nodeScope);
+    const existing = nodeScopes.get(node.id);
+    if (existing) nodeScope = existing;
+    else {
+      nodeScope = new Scope(rule.scope, node, currentScope);
+      nodeScopes.set(node.id, nodeScope);
+    }
   }
   if (rule) {
     processDeclarations(node, rule, nodeScope, semantic, nodeScopes, context, declaredNodeIds);
@@ -12409,12 +12413,17 @@ function processReferences(node, rule, _scope, references, context, declaredNode
   }
   references.push(ref);
 }
-function resolveReference(ref, context) {
+function resolveReference(ref, context, workspace) {
   if (ref.resolved) return ref.resolved;
   const scope = context.scopeOf(ref.node);
   if (!scope) return null;
   const decl = scope.lookup(ref.name, ref.to);
-  return decl;
+  if (decl) return decl;
+  if (workspace) {
+    const publicDecls = workspace.lookupPublic(ref.name, ref.to);
+    if (publicDecls.length > 0) return publicDecls[0];
+  }
+  return null;
 }
 function getVisibility(node, descriptor) {
   if (!descriptor.visibility) return "private";
@@ -12475,12 +12484,16 @@ var Workspace = class {
   * @returns The DocumentScope for this document
   */
   addDocument(document2) {
-    const scope = buildScopes(document2, this.semantic);
+    const scope = buildScopes(document2, this.semantic, this);
     this.documents.set(document2.uri, {
       document: document2,
       scope
     });
     this.rebuildPublicIndex();
+    for (const [uri, entry] of this.documents) {
+      if (uri === document2.uri) continue;
+      entry.scope = buildScopes(entry.document, this.semantic, this);
+    }
     return scope;
   }
   /**
@@ -12929,7 +12942,7 @@ var COMPLETION_KIND_MAP = {
 function provideCompletion(document2, position, docScope, semantic, lsp, workspace) {
   const node = findNodeAtPosition(document2.root, position);
   const ctx = createLspContext(docScope, workspace ?? {}, document2, semantic);
-  const scopeItems = getScopeCompletions(node, docScope, lsp);
+  const scopeItems = getScopeCompletions(node, docScope, lsp, workspace);
   const keywordItems = getKeywordCompletions(lsp);
   const customResult = getCustomCompletions(node, ctx, lsp);
   if (customResult?.replace) return customResult.items;
@@ -12937,7 +12950,7 @@ function provideCompletion(document2, position, docScope, semantic, lsp, workspa
   if (customResult) allItems.push(...customResult.items);
   return deduplicateCompletions(allItems);
 }
-function getScopeCompletions(node, docScope, lsp) {
+function getScopeCompletions(node, docScope, lsp, workspace) {
   const scope = findScopeForNode(node, docScope);
   const items = [];
   const seen = /* @__PURE__ */ new Set();
@@ -12957,6 +12970,18 @@ function getScopeCompletions(node, docScope, lsp) {
     }
     if (currentScope.kind === "isolated") break;
     currentScope = currentScope.parent;
+  }
+  if (workspace) for (const decl of workspace.getAllPublicDeclarations()) {
+    if (seen.has(decl.name)) continue;
+    seen.add(decl.name);
+    const lspRule = lsp?.[decl.declaredBy];
+    const kind = lspRule?.completionKind;
+    const item = {
+      label: decl.name,
+      detail: decl.declaredBy
+    };
+    if (kind) item.kind = kind;
+    items.push(item);
   }
   return items;
 }
@@ -13843,10 +13868,19 @@ var grammar_default = defineLanguage({
     program: (r) => r.repeat(r.rule("statement")),
     // Statements
     statement: (r) => r.choice(
+      r.rule("global_var_decl"),
       r.rule("variable_decl"),
       r.rule("function_decl"),
       r.rule("return_statement"),
       r.rule("expr_statement")
+    ),
+    // Global variable declaration: var name = value;
+    global_var_decl: (r) => r.seq(
+      "var",
+      r.field("name", r.rule("identifier")),
+      "=",
+      r.field("value", r.rule("expression")),
+      ";"
     ),
     // Variable declaration: let name = value;
     variable_decl: (r) => r.seq(
@@ -13941,6 +13975,14 @@ var grammar_default = defineLanguage({
   semantic: {
     // Program creates global scope
     program: { scope: "global" },
+    // Global variable declarations introduce names in global scope
+    global_var_decl: {
+      declares: {
+        field: "name",
+        scope: "global",
+        visibility: "public"
+      }
+    },
     // Variable declarations introduce names
     variable_decl: {
       declares: {
@@ -13969,12 +14011,20 @@ var grammar_default = defineLanguage({
     identifier: {
       references: {
         field: "name",
-        to: ["variable_decl", "function_decl", "parameter"],
+        to: ["global_var_decl", "variable_decl", "function_decl", "parameter"],
         onUnresolved: "error"
       }
     }
   },
   validation: {
+    // Ensure global variable has an initializer
+    global_var_decl(node, ctx) {
+      if (!node.field("value")) {
+        ctx.error(node, "Global variable must have an initializer", {
+          property: "value"
+        });
+      }
+    },
     // Ensure variable has an initializer
     variable_decl(node, ctx) {
       if (!node.field("value")) {
@@ -13987,9 +14037,22 @@ var grammar_default = defineLanguage({
   lsp: {
     // Keyword completions
     $keywords: {
+      "var": { detail: "Declare a global variable" },
       "let": { detail: "Declare a variable" },
       "fn": { detail: "Declare a function" },
       "return": { detail: "Return a value" }
+    },
+    // Hover for global variables
+    global_var_decl: {
+      completionKind: "Variable",
+      symbol: {
+        kind: "Variable",
+        label: (n) => n.field("name").text
+      },
+      hover(node, ctx) {
+        const name2 = node.field("name").text;
+        return `**var** \`${name2}\``;
+      }
     },
     // Hover for variables
     variable_decl: {

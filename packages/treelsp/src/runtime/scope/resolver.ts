@@ -13,6 +13,7 @@ import type {
   Visibility,
 } from '../../definition/semantic.js';
 import { Scope, type Declaration, type Reference } from './scope.js';
+import type { Workspace } from './workspace.js';
 
 /**
  * Resolution context - passed to custom resolver functions
@@ -64,7 +65,8 @@ export interface DocumentScope {
  */
 export function buildScopes(
   document: DocumentState,
-  semantic: SemanticDefinition
+  semantic: SemanticDefinition,
+  workspace?: Workspace
 ): DocumentScope {
   const root = document.root;
 
@@ -111,7 +113,7 @@ export function buildScopes(
 
   // Resolve all references
   for (const ref of references) {
-    ref.resolved = resolveReference(ref, context);
+    ref.resolved = resolveReference(ref, context, workspace);
   }
 
   // Get all declarations
@@ -142,8 +144,14 @@ function walkTree(
   // Check if this node creates a new scope
   let nodeScope = currentScope;
   if (rule?.scope) {
-    nodeScope = new Scope(rule.scope, node, currentScope);
-    nodeScopes.set(node.id, nodeScope);
+    // Reuse pre-created scope (e.g., root global scope) if already in nodeScopes
+    const existing = nodeScopes.get(node.id);
+    if (existing) {
+      nodeScope = existing;
+    } else {
+      nodeScope = new Scope(rule.scope, node, currentScope);
+      nodeScopes.set(node.id, nodeScope);
+    }
   }
 
   // Process declarations and references
@@ -276,7 +284,8 @@ function processReferences(
  */
 function resolveReference(
   ref: Reference,
-  context: ResolutionContext
+  context: ResolutionContext,
+  workspace?: Workspace
 ): Declaration | null {
   // If already resolved by custom resolver, return it
   if (ref.resolved) {
@@ -291,7 +300,19 @@ function resolveReference(
 
   // Look up the name in the scope chain
   const decl = scope.lookup(ref.name, ref.to);
-  return decl;
+  if (decl) {
+    return decl;
+  }
+
+  // Fall back to workspace public declarations (cross-file resolution)
+  if (workspace) {
+    const publicDecls = workspace.lookupPublic(ref.name, ref.to);
+    if (publicDecls.length > 0) {
+      return publicDecls[0]!;
+    }
+  }
+
+  return null;
 }
 
 /**

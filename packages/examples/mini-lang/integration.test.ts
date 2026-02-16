@@ -215,4 +215,96 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(edits!.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  // ========== Cross-file Resolution Tests ==========
+
+  describe('cross-file resolution', () => {
+    let doc1: DocumentState;
+    let doc2: DocumentState;
+    let service: LanguageService;
+
+    afterAll(() => {
+      doc1?.dispose();
+      doc2?.dispose();
+    });
+
+    it('indexes public declarations in workspace', async () => {
+      // File 1 declares a global variable with visibility: 'public'
+      const source1 = readFileSync(testMiniPath, 'utf-8');
+      doc1 = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///test.mini', version: 1, languageId: 'minilang' },
+        source1,
+      );
+
+      // File 2 references globalVar from file 1
+      const test2Path = resolve(__dirname, 'test2.mini');
+      const source2 = readFileSync(test2Path, 'utf-8');
+      doc2 = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///test2.mini', version: 1, languageId: 'minilang' },
+        source2,
+      );
+
+      service = createServer(definition);
+      service.documents.open(doc1);
+
+      const workspace = service.documents.getWorkspace();
+      const stats = workspace.getStats();
+      expect(stats.publicDeclarationCount).toBeGreaterThan(0);
+
+      const publicDecls = workspace.lookupPublic('globalVar');
+      expect(publicDecls).toHaveLength(1);
+      expect(publicDecls[0]!.declaredBy).toBe('global_var_decl');
+    });
+
+    it('resolves public declaration from another file', () => {
+      service.documents.open(doc2);
+
+      // Check that doc2's scope resolved the cross-file reference
+      const wsDoc2 = service.documents.get('file:///test2.mini');
+      const unresolvedRefs = wsDoc2!.scope.references.filter(r => !r.resolved);
+      expect(unresolvedRefs).toHaveLength(0);
+
+      // test2.mini should have no unresolved reference errors
+      const diags = service.computeDiagnostics(doc2);
+      const unresolvedErrors = diags.filter(
+        d => d.code === 'unresolved-reference'
+      );
+      expect(unresolvedErrors).toHaveLength(0);
+    });
+
+    it('resolves when file with reference is opened before declaring file', async () => {
+      const service2 = createServer(definition);
+
+      // Open file 2 FIRST (references globalVar)
+      service2.documents.open(doc2);
+
+      // At this point globalVar is unresolved
+      const diagsBefore = service2.computeDiagnostics(doc2);
+      const unresolvedBefore = diagsBefore.filter(
+        d => d.code === 'unresolved-reference'
+      );
+      expect(unresolvedBefore).toHaveLength(1);
+
+      // Now open file 1 (declares globalVar)
+      service2.documents.open(doc1);
+
+      // After opening file 1, file 2 should resolve globalVar
+      const diagsAfter = service2.computeDiagnostics(doc2);
+      const unresolvedAfter = diagsAfter.filter(
+        d => d.code === 'unresolved-reference'
+      );
+      expect(unresolvedAfter).toHaveLength(0);
+    });
+
+    it('provides completion for cross-file public declarations', () => {
+      const completions = service.provideCompletion(
+        doc2,
+        { line: 0, character: 10 },
+      );
+      const labels = completions.map(c => c.label);
+      expect(labels).toContain('globalVar');
+    });
+  });
 });

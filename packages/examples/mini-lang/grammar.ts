@@ -19,10 +19,20 @@ export default defineLanguage({
 
     // Statements
     statement: r => r.choice(
+      r.rule('global_var_decl'),
       r.rule('variable_decl'),
       r.rule('function_decl'),
       r.rule('return_statement'),
       r.rule('expr_statement'),
+    ),
+
+    // Global variable declaration: var name = value;
+    global_var_decl: r => r.seq(
+      'var',
+      r.field('name', r.rule('identifier')),
+      '=',
+      r.field('value', r.rule('expression')),
+      ';',
     ),
 
     // Variable declaration: let name = value;
@@ -131,6 +141,15 @@ export default defineLanguage({
     // Program creates global scope
     program: { scope: 'global' },
 
+    // Global variable declarations introduce names in global scope
+    global_var_decl: {
+      declares: {
+        field: 'name',
+        scope: 'global',
+        visibility: 'public',
+      },
+    },
+
     // Variable declarations introduce names
     variable_decl: {
       declares: {
@@ -163,13 +182,22 @@ export default defineLanguage({
     identifier: {
       references: {
         field: 'name',
-        to: ['variable_decl', 'function_decl', 'parameter'],
+        to: ['global_var_decl', 'variable_decl', 'function_decl', 'parameter'],
         onUnresolved: 'error',
       },
     },
   },
 
   validation: {
+    // Ensure global variable has an initializer
+    global_var_decl(node, ctx) {
+      if (!node.field('value')) {
+        ctx.error(node, 'Global variable must have an initializer', {
+          property: 'value',
+        });
+      }
+    },
+
     // Ensure variable has an initializer
     variable_decl(node, ctx) {
       if (!node.field('value')) {
@@ -183,9 +211,23 @@ export default defineLanguage({
   lsp: {
     // Keyword completions
     $keywords: {
+      'var': { detail: 'Declare a global variable' },
       'let': { detail: 'Declare a variable' },
       'fn': { detail: 'Declare a function' },
       'return': { detail: 'Return a value' },
+    },
+
+    // Hover for global variables
+    global_var_decl: {
+      completionKind: 'Variable',
+      symbol: {
+        kind: 'Variable',
+        label: n => n.field('name').text,
+      },
+      hover(node, ctx) {
+        const name = node.field('name').text;
+        return `**var** \`${name}\``;
+      },
     },
 
     // Hover for variables

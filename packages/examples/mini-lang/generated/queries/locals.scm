@@ -7,6 +7,7 @@
 (block) @local.scope
 
 ; Definitions
+(global_var_decl name: (identifier) @local.definition)
 (variable_decl name: (identifier) @local.definition)
 (function_decl name: (identifier) @local.definition)
 (parameter name: (identifier) @local.definition)

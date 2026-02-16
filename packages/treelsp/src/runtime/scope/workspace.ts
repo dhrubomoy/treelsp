@@ -57,7 +57,7 @@ export class Workspace {
    * @returns The DocumentScope for this document
    */
   addDocument(document: DocumentState): DocumentScope {
-    const scope = buildScopes(document, this.semantic);
+    const scope = buildScopes(document, this.semantic, this);
 
     this.documents.set(document.uri, {
       document,
@@ -66,6 +66,13 @@ export class Workspace {
 
     // Update public declarations index
     this.rebuildPublicIndex();
+
+    // Re-scope other documents so they can resolve cross-file references
+    // against the updated public index. V1: full rebuild is simple and correct.
+    for (const [uri, entry] of this.documents) {
+      if (uri === document.uri) continue;
+      entry.scope = buildScopes(entry.document, this.semantic, this);
+    }
 
     return scope;
   }

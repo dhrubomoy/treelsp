@@ -60,8 +60,8 @@ export function provideCompletion(
     semantic
   );
 
-  // 1. Scope-based completions
-  const scopeItems = getScopeCompletions(node, docScope, lsp);
+  // 1. Scope-based completions (local + workspace public)
+  const scopeItems = getScopeCompletions(node, docScope, lsp, workspace);
 
   // 2. Keyword completions
   const keywordItems = getKeywordCompletions(lsp);
@@ -88,7 +88,8 @@ export function provideCompletion(
 function getScopeCompletions(
   node: ASTNode,
   docScope: DocumentScope,
-  lsp?: LspDefinition
+  lsp?: LspDefinition,
+  workspace?: Workspace
 ): CompletionItem[] {
   const scope = findScopeForNode(node, docScope);
   const items: CompletionItem[] = [];
@@ -121,6 +122,28 @@ function getScopeCompletions(
       break;
     }
     currentScope = currentScope.parent;
+  }
+
+  // Include public declarations from other files
+  if (workspace) {
+    for (const decl of workspace.getAllPublicDeclarations()) {
+      if (seen.has(decl.name)) {
+        continue;
+      }
+      seen.add(decl.name);
+
+      const lspRule = lsp?.[decl.declaredBy];
+      const kind = lspRule?.completionKind;
+
+      const item: CompletionItem = {
+        label: decl.name,
+        detail: decl.declaredBy,
+      };
+      if (kind) {
+        item.kind = kind;
+      }
+      items.push(item);
+    }
   }
 
   return items;

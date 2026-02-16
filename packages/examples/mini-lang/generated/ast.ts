@@ -13,6 +13,12 @@ export interface StatementNode extends ASTNode {
   readonly type: 'statement';
 }
 
+export interface GlobalVarDeclNode extends ASTNode {
+  readonly type: 'global_var_decl';
+  field(name: 'name'): IdentifierNode;
+  field(name: 'value'): ExpressionNode;
+}
+
 export interface VariableDeclNode extends ASTNode {
   readonly type: 'variable_decl';
   field(name: 'name'): IdentifierNode;
@@ -89,6 +95,7 @@ export interface CommentNode extends ASTNode {
 export type MiniLangNode =
   | ProgramNode
   | StatementNode
+  | GlobalVarDeclNode
   | VariableDeclNode
   | FunctionDeclNode
   | ParameterListNode
