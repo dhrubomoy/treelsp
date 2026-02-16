@@ -1,10 +1,7 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
-
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+  workflow_dispatch:
 
 jobs:
   release:
@@ -30,7 +27,6 @@ jobs:
       - run: pnpm build
 
       - name: Create release PR or publish
-        id: changesets
         uses: changesets/action@v1
         with:
           publish: pnpm release
