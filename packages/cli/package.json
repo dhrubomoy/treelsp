@@ -1,6 +1,9 @@
 {
   "name": "@treelsp/cli",
   "version": "0.0.1",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "CLI tool for treelsp - LSP generator using Tree-sitter",
   "type": "module",
   "bin": {
