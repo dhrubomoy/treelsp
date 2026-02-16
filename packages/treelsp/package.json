@@ -32,7 +32,6 @@
     "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
     "lint": "eslint src",
     "clean": "rm -rf dist *.tsbuildinfo"
   },

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "test:coverage": "pnpm --filter treelsp test:coverage",
+    "test:coverage": "vitest run --coverage",
     "lint": "pnpm -r lint",
     "dev": "pnpm -r dev",
     "clean": "pnpm -r clean && rm -rf node_modules",
