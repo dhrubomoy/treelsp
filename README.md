@@ -141,8 +141,8 @@ These are the remaining tasks to go from "core complete" to "usable end-to-end":
 
 - [x] **Compile grammar.wasm** — Wire tree-sitter CLI in `treelsp build` to compile `grammar.js → grammar.wasm`
 - [x] **Live integration test** — Run the actual LSP server against `test.mini` with a real WASM parser to verify parsing, diagnostics, hover, go-to-definition all work
-- [ ] **Language contribution in extension** — Dynamically register `contributes.languages` from manifest so VS Code recognizes file extensions without hardcoding
-- [ ] **Syntax highlighting** — Generate `highlights.scm` queries from grammar for Tree-sitter-based syntax highlighting
+- [x] **Dynamic language discovery** — VS Code extension uses pattern-based document selectors to activate for any treelsp language without hardcoding or window reloads
+- [x] **Syntax highlighting** — Generate `highlights.scm` and `locals.scm` queries from grammar + LSP semantic tokens
 - [ ] **Publish pipeline** — VS Code Marketplace packaging for `@treelsp/vscode`, npm publishing for `treelsp` and `@treelsp/cli`
 - [ ] **Error recovery UX** — Surface meaningful errors when grammar.wasm is missing, server fails to start, etc.
 - [ ] **Second example language** — Validate the framework generalizes beyond mini-lang
