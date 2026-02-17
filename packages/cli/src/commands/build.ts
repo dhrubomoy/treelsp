@@ -26,18 +26,7 @@ export async function buildProject(project: ResolvedLanguageProject) {
       throw new Error('grammar.js not found');
     }
 
-    // 2. Check tree-sitter CLI is installed
-    try {
-      execSync('tree-sitter --version', { stdio: 'ignore' });
-    } catch {
-      spinner.fail('tree-sitter CLI not found');
-      console.log(pc.dim('\nInstall tree-sitter CLI:'));
-      console.log(pc.dim('  npm install -g tree-sitter-cli'));
-      console.log(pc.dim('  or: cargo install tree-sitter-cli'));
-      throw new Error('tree-sitter CLI not found');
-    }
-
-    // 3. Run tree-sitter generate (generates C parser from grammar.js)
+    // 2. Run tree-sitter generate (generates C parser from grammar.js)
     //    tree-sitter runs grammar.js through Node.js, which fails in
     //    "type": "module" packages because grammar.js uses CommonJS.
     //    A temporary package.json in generated/ overrides the parent to CommonJS.
