@@ -4,23 +4,40 @@
 
 import chokidar from 'chokidar';
 import pc from 'picocolors';
+import { relative } from 'node:path';
 import { existsSync } from 'node:fs';
-import { generate } from './generate.js';
-import { build } from './build.js';
+import { generateProject } from './generate.js';
+import { buildProject } from './build.js';
+import type { ConfigResult, ResolvedLanguageProject } from '../config.js';
 
-export async function watch() {
+export async function watch(configResult: ConfigResult) {
   console.log(pc.bold('treelsp watch\n'));
 
-  // Check that grammar.ts exists before starting watch
-  if (!existsSync('grammar.ts')) {
-    console.error(pc.red('Could not find grammar.ts in current directory'));
-    console.log(pc.dim('\nRun "treelsp init" to create a new language project'));
-    process.exit(1);
+  const { projects } = configResult;
+
+  // Build a map from grammar file path to project for quick lookup
+  const projectByGrammar = new Map<string, ResolvedLanguageProject>();
+  const grammarPaths: string[] = [];
+
+  for (const project of projects) {
+    if (!existsSync(project.grammarPath)) {
+      console.error(pc.red(`Could not find ${relative(process.cwd(), project.grammarPath)}`));
+      process.exit(1);
+    }
+    projectByGrammar.set(project.grammarPath, project);
+    grammarPaths.push(project.grammarPath);
   }
 
-  const watcher = chokidar.watch('grammar.ts', {
+  if (projects.length > 1) {
+    console.log(pc.dim(`Watching ${String(projects.length)} language projects:`));
+    for (const p of projects) {
+      console.log(pc.dim(`  - ${relative(process.cwd(), p.grammarPath)}`));
+    }
+    console.log('');
+  }
+
+  const watcher = chokidar.watch(grammarPaths, {
     persistent: true,
-    // Debounce rapid changes
     awaitWriteFinish: {
       stabilityThreshold: 100,
       pollInterval: 50,
@@ -29,24 +46,25 @@ export async function watch() {
 
   let isBuilding = false;
 
-  watcher.on('change', (path) => {
+  watcher.on('change', (changedPath) => {
     void (async () => {
       if (isBuilding) {
         console.log(pc.dim('Build in progress, skipping...'));
         return;
       }
 
-      console.log(pc.dim(`\n${path} changed`));
+      const project = projectByGrammar.get(changedPath);
+      if (!project) return;
+
+      console.log(pc.dim(`\n${relative(process.cwd(), changedPath)} changed`));
       isBuilding = true;
 
       try {
-        await generate({});
-        await build();
-        console.log(pc.green('✓ Rebuild successful\n'));
-      } catch (_error) {
-        // Errors are already logged by generate/build commands
-        // Just note the failure and continue watching
-        console.log(pc.red('✗ Rebuild failed\n'));
+        await generateProject(project);
+        await buildProject(project);
+        console.log(pc.green('  Rebuild successful\n'));
+      } catch {
+        console.log(pc.red('  Rebuild failed\n'));
       } finally {
         isBuilding = false;
         console.log(pc.dim('Watching for changes...'));
@@ -58,16 +76,16 @@ export async function watch() {
     console.error(pc.red('Watcher error:'), error instanceof Error ? error.message : String(error));
   });
 
-  console.log(pc.dim('Running initial build...\n'));
-
   // Initial build
-  try {
-    await generate({});
-    await build();
-    console.log(pc.green('✓ Initial build successful\n'));
-  } catch (_error) {
-    console.log(pc.red('✗ Initial build failed\n'));
+  console.log(pc.dim('Running initial build...\n'));
+  for (const project of projects) {
+    try {
+      await generateProject(project);
+      await buildProject(project);
+    } catch {
+      console.log(pc.red(`  ${relative(process.cwd(), project.projectDir)} - FAILED\n`));
+    }
   }
 
-  console.log(pc.dim('Watching for changes...'));
+  console.log(pc.dim('\nWatching for changes...'));
 }

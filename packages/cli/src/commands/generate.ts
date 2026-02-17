@@ -5,27 +5,29 @@
 import ora from 'ora';
 import pc from 'picocolors';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
 import { generateGrammar, generateAstTypes, generateManifest, generateHighlights, generateLocals } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
+import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
 
-export async function generate(options: { watch?: boolean }) {
-  const spinner = ora('Loading grammar.ts...').start();
+/**
+ * Generate code for a single language project.
+ */
+export async function generateProject(project: ResolvedLanguageProject): Promise<void> {
+  const label = relative(process.cwd(), project.grammarPath) || project.grammarPath;
+  const spinner = ora(`Loading ${label}...`).start();
 
   try {
-    // 1. Find grammar.ts in current working directory
-    const grammarPath = resolve(process.cwd(), 'grammar.ts');
-
-    if (!existsSync(grammarPath)) {
-      spinner.fail('Could not find grammar.ts in current directory');
+    if (!existsSync(project.grammarPath)) {
+      spinner.fail(`Could not find ${label}`);
       console.log(pc.dim('\nRun "treelsp init" to create a new language project'));
-      throw new Error('grammar.ts not found');
+      throw new Error(`Grammar file not found: ${project.grammarPath}`);
     }
 
-    // 2. Dynamically import the language definition
-    const grammarUrl = pathToFileURL(grammarPath).href;
+    // Dynamically import the language definition
+    const grammarUrl = pathToFileURL(project.grammarPath).href;
     const module = await import(grammarUrl) as { default: LanguageDefinition<string> };
     const definition = module.default;
 
@@ -37,48 +39,61 @@ export async function generate(options: { watch?: boolean }) {
 
     spinner.text = `Generating code for ${definition.name}...`;
 
-    // 3. Generate code artifacts
+    // Generate code artifacts
     const grammarJs = generateGrammar(definition);
     const astTypes = generateAstTypes(definition);
     const manifest = generateManifest(definition);
     const highlightsSCM = generateHighlights(definition);
     const localsSCM = generateLocals(definition);
 
-    // 4. Create generated/ and generated/queries/ directories
-    const genDir = resolve(process.cwd(), 'generated');
-    const queriesDir = resolve(genDir, 'queries');
+    // Create output directories
+    const queriesDir = resolve(project.outDir, 'queries');
     await mkdir(queriesDir, { recursive: true });
 
-    // 5. Write output files
+    // Write output files
     await Promise.all([
-      writeFile(resolve(genDir, 'grammar.js'), grammarJs, 'utf-8'),
-      writeFile(resolve(genDir, 'ast.ts'), astTypes, 'utf-8'),
-      writeFile(resolve(genDir, 'treelsp.json'), manifest, 'utf-8'),
+      writeFile(resolve(project.outDir, 'grammar.js'), grammarJs, 'utf-8'),
+      writeFile(resolve(project.outDir, 'ast.ts'), astTypes, 'utf-8'),
+      writeFile(resolve(project.outDir, 'treelsp.json'), manifest, 'utf-8'),
       writeFile(resolve(queriesDir, 'highlights.scm'), highlightsSCM, 'utf-8'),
       writeFile(resolve(queriesDir, 'locals.scm'), localsSCM, 'utf-8'),
     ]);
 
-    spinner.succeed('Generated grammar.js, ast.ts, treelsp.json, queries/highlights.scm, queries/locals.scm');
-
-    if (!options.watch) {
-      console.log(pc.dim('\nNext step: Run "treelsp build" to compile grammar to WASM'));
-    }
+    const outLabel = relative(process.cwd(), project.outDir) || project.outDir;
+    spinner.succeed(`Generated ${definition.name} -> ${outLabel}/`);
 
   } catch (error) {
-    spinner.fail('Generation failed');
+    if (!spinner.isSpinning) {
+      // spinner already stopped by fail() above
+    } else {
+      spinner.fail(`Generation failed for ${label}`);
+    }
 
     if (error instanceof Error) {
       if (error.message.includes('Cannot find module')) {
-        console.error(pc.red('\nFailed to load grammar.ts'));
+        console.error(pc.red('\nFailed to load grammar file'));
         console.log(pc.dim('Ensure the file exists and has no syntax errors'));
       } else if (error.message.includes('EACCES') || error.message.includes('EPERM')) {
-        console.error(pc.red('\nPermission denied writing to generated/'));
-        console.log(pc.dim('Check file permissions in the current directory'));
+        console.error(pc.red(`\nPermission denied writing to ${project.outDir}`));
+        console.log(pc.dim('Check file permissions'));
       } else {
         console.error(pc.red(`\n${error.message}`));
       }
     }
 
     throw error;
+  }
+}
+
+/**
+ * Top-level generate command handler.
+ */
+export async function generate(options: { watch?: boolean }, configResult: ConfigResult): Promise<void> {
+  for (const project of configResult.projects) {
+    await generateProject(project);
+  }
+
+  if (!options.watch) {
+    console.log(pc.dim('\nNext step: Run "treelsp build" to compile grammar to WASM'));
   }
 }

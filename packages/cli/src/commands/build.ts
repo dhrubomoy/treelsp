@@ -4,21 +4,26 @@
 
 import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { build as esbuild } from 'esbuild';
 import ora from 'ora';
 import pc from 'picocolors';
+import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
 
-export async function build() {
-  const spinner = ora('Checking prerequisites...').start();
+/**
+ * Build a single language project: tree-sitter generate + build --wasm + bundle server.
+ */
+export async function buildProject(project: ResolvedLanguageProject) {
+  const label = relative(process.cwd(), project.projectDir) || project.projectDir;
+  const spinner = ora(`Building ${label}...`).start();
 
   try {
-    // 1. Check that generated/grammar.js exists
-    const grammarPath = resolve(process.cwd(), 'generated', 'grammar.js');
-    if (!existsSync(grammarPath)) {
-      spinner.fail('generated/grammar.js not found');
+    // 1. Check that grammar.js exists in outDir
+    const grammarJsPath = resolve(project.outDir, 'grammar.js');
+    if (!existsSync(grammarJsPath)) {
+      spinner.fail(`${relative(process.cwd(), grammarJsPath)} not found`);
       console.log(pc.dim('\nRun "treelsp generate" first to create grammar.js'));
-      throw new Error('generated/grammar.js not found');
+      throw new Error('grammar.js not found');
     }
 
     // 2. Check tree-sitter CLI is installed
@@ -36,19 +41,21 @@ export async function build() {
     //    tree-sitter runs grammar.js through Node.js, which fails in
     //    "type": "module" packages because grammar.js uses CommonJS.
     //    A temporary package.json in generated/ overrides the parent to CommonJS.
-    spinner.text = 'Generating C parser...';
-    const genDir = resolve(process.cwd(), 'generated');
-    const genPkgJson = resolve(genDir, 'package.json');
+    spinner.text = `Generating C parser for ${label}...`;
+    const genPkgJson = resolve(project.outDir, 'package.json');
     const hadPkgJson = existsSync(genPkgJson);
 
     if (!hadPkgJson) {
       writeFileSync(genPkgJson, '{"type":"commonjs"}\n');
     }
 
+    // Compute path to grammar.js relative to projectDir for tree-sitter
+    const relGrammarJs = relative(project.projectDir, grammarJsPath);
+
     try {
-      execSync('tree-sitter generate generated/grammar.js', {
+      execSync(`tree-sitter generate ${relGrammarJs}`, {
         stdio: 'pipe',
-        cwd: process.cwd(),
+        cwd: project.projectDir,
       });
     } finally {
       if (!hadPkgJson) {
@@ -57,25 +64,24 @@ export async function build() {
     }
 
     // 4. Run tree-sitter build --wasm (compiles to WebAssembly)
-    spinner.text = 'Compiling to WASM...';
+    spinner.text = `Compiling to WASM for ${label}...`;
     execSync('tree-sitter build --wasm', {
       stdio: 'pipe',
-      cwd: process.cwd(),
+      cwd: project.projectDir,
     });
 
-    // 5. Move tree-sitter-*.wasm to generated/grammar.wasm
-    //    tree-sitter outputs tree-sitter-{name}.wasm in cwd
+    // 5. Move tree-sitter-*.wasm to outDir/grammar.wasm
+    //    tree-sitter outputs tree-sitter-{name}.wasm in cwd (projectDir)
     spinner.text = 'Moving WASM output...';
-    const cwd = process.cwd();
-    const wasmFiles = readdirSync(cwd).filter(
+    const wasmFiles = readdirSync(project.projectDir).filter(
       f => f.startsWith('tree-sitter-') && f.endsWith('.wasm')
     );
     if (wasmFiles.length === 0) {
       spinner.fail('tree-sitter build --wasm did not produce a .wasm file');
       throw new Error('No .wasm file produced');
     }
-    const sourceWasm = resolve(cwd, wasmFiles[0]!);
-    const destWasm = resolve(cwd, 'generated', 'grammar.wasm');
+    const sourceWasm = resolve(project.projectDir, wasmFiles[0]!);
+    const destWasm = resolve(project.outDir, 'grammar.wasm');
     renameSync(sourceWasm, destWasm);
 
     // 6. Clean up tree-sitter generate artifacts (C source, bindings, etc.)
@@ -84,28 +90,28 @@ export async function build() {
       'binding.gyp', 'Makefile', 'Package.swift', '.editorconfig',
     ];
     for (const dir of cleanupDirs) {
-      const p = resolve(cwd, dir);
+      const p = resolve(project.projectDir, dir);
       if (existsSync(p)) {
         rmSync(p, { recursive: true, force: true });
       }
     }
     for (const file of cleanupFiles) {
-      const p = resolve(cwd, file);
+      const p = resolve(project.projectDir, file);
       if (existsSync(p)) {
         rmSync(p, { force: true });
       }
     }
     // Remove tree-sitter-{name}.pc files
-    for (const f of readdirSync(cwd)) {
+    for (const f of readdirSync(project.projectDir)) {
       if (f.startsWith('tree-sitter-') && f.endsWith('.pc')) {
-        rmSync(resolve(cwd, f), { force: true });
+        rmSync(resolve(project.projectDir, f), { force: true });
       }
     }
 
     // 7. Bundle language server into a self-contained CJS file
     //    The entry point is created inline — no generated server.js needed.
     //    It imports treelsp/server and the user's grammar definition, then starts.
-    spinner.text = 'Bundling language server...';
+    spinner.text = `Bundling language server for ${label}...`;
 
     const serverEntry = [
       `import { startStdioServer } from 'treelsp/server';`,
@@ -124,13 +130,13 @@ export async function build() {
     const treelspServer = import.meta.resolve('treelsp/server');
     // treelsp/server resolves to .../packages/treelsp/dist/server/index.js
     const treelspPkg = resolve(new URL(treelspServer).pathname, '..', '..', '..');
-    const bundlePath = resolve(genDir, 'server.bundle.cjs');
+    const bundlePath = resolve(project.outDir, 'server.bundle.cjs');
 
-    // resolveDir is CWD so ./grammar.ts finds the user's language definition
+    // resolveDir is projectDir so ./grammar.ts finds the user's language definition
     await esbuild({
       stdin: {
         contents: serverEntry,
-        resolveDir: process.cwd(),
+        resolveDir: project.projectDir,
         loader: 'ts',
       },
       bundle: true,
@@ -156,21 +162,16 @@ export async function build() {
     // When bundled, it looks in the same directory as the JS file.
     const treelspNodeModules = resolve(treelspPkg, 'node_modules');
     const tsWasmSrc = resolve(treelspNodeModules, 'web-tree-sitter', 'tree-sitter.wasm');
-    const tsWasmDest = resolve(genDir, 'tree-sitter.wasm');
+    const tsWasmDest = resolve(project.outDir, 'tree-sitter.wasm');
     if (existsSync(tsWasmSrc) && !existsSync(tsWasmDest)) {
       copyFileSync(tsWasmSrc, tsWasmDest);
     }
 
-    spinner.succeed('Build complete');
-    console.log(pc.dim('\nGenerated files:'));
-    console.log(pc.dim('  generated/grammar.js'));
-    console.log(pc.dim('  generated/grammar.wasm'));
-    if (existsSync(resolve(genDir, 'server.bundle.cjs'))) {
-      console.log(pc.dim('  generated/server.bundle.cjs'));
-    }
+    const outLabel = relative(process.cwd(), project.outDir) || project.outDir;
+    spinner.succeed(`Built ${label} -> ${outLabel}/`);
 
   } catch (error) {
-    spinner.fail('Build failed');
+    spinner.fail(`Build failed for ${label}`);
 
     if (error instanceof Error) {
       // esbuild rejects with an errors array
@@ -203,5 +204,14 @@ export async function build() {
     }
 
     throw error;
+  }
+}
+
+/**
+ * Top-level build command handler.
+ */
+export async function build(configResult: ConfigResult) {
+  for (const project of configResult.projects) {
+    await buildProject(project);
   }
 }

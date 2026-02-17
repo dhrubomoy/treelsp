@@ -5,7 +5,7 @@
   "description": "Example languages for treelsp",
   "type": "module",
   "scripts": {
-    "build": "cd mini-lang && treelsp generate && treelsp build && cd ../schema-lang && treelsp generate && treelsp build",
+    "build": "treelsp generate && treelsp build",
     "test": "vitest run",
     "lint": "eslint .",
     "clean": "rm -rf */generated"
