@@ -7,10 +7,11 @@
   "description": "CLI tool for treelsp - LSP generator using Tree-sitter",
   "type": "module",
   "bin": {
-    "treelsp": "./dist/index.js"
+    "treelsp": "./bin/treelsp.js"
   },
   "files": [
     "dist",
+    "bin",
     "README.md"
   ],
   "scripts": {

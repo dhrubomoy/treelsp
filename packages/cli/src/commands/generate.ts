@@ -7,7 +7,8 @@ import pc from 'picocolors';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
+import { build as esbuildBuild } from 'esbuild';
 import { generateGrammar, generateAstTypes, generateManifest, generateHighlights, generateLocals } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
 import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
@@ -26,10 +27,27 @@ export async function generateProject(project: ResolvedLanguageProject): Promise
       throw new Error(`Grammar file not found: ${project.grammarPath}`);
     }
 
-    // Dynamically import the language definition
-    const grammarUrl = pathToFileURL(project.grammarPath).href;
-    const module = await import(grammarUrl) as { default: LanguageDefinition<string> };
-    const definition = module.default;
+    // Transpile grammar.ts via esbuild so it works on any Node version
+    // (Node <23.6 can't import .ts files natively)
+    const tmpPath = project.grammarPath.replace(/\.ts$/, '.tmp.mjs');
+    await esbuildBuild({
+      entryPoints: [project.grammarPath],
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      outfile: tmpPath,
+      packages: 'external',
+      logLevel: 'silent',
+    });
+
+    let definition: LanguageDefinition<string>;
+    try {
+      const grammarUrl = pathToFileURL(tmpPath).href;
+      const mod = await import(grammarUrl) as { default: LanguageDefinition<string> };
+      definition = mod.default;
+    } finally {
+      try { unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
+    }
 
     if (!definition || !definition.name || !definition.grammar) {
       spinner.fail('Invalid language definition');
