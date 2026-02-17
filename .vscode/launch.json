@@ -2,12 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Extension",
+      "name": "Launch Extension (mini-lang)",
       "type": "extensionHost",
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/mini-lang"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode/dist/**/*.js"
+      ],
+      "preLaunchTask": "build-extension"
+    },
+    {
+      "name": "Launch Extension (schema-lang)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${workspaceFolder}/packages/examples/schema-lang"
       ],
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
@@ -54,9 +67,16 @@
   ],
   "compounds": [
     {
-      "name": "Debug Extension + Server",
+      "name": "Debug Extension + Server (mini-lang)",
       "configurations": [
-        "Launch Extension",
+        "Launch Extension (mini-lang)",
+        "Attach to LSP Server"
+      ]
+    },
+    {
+      "name": "Debug Extension + Server (schema-lang)",
+      "configurations": [
+        "Launch Extension (schema-lang)",
         "Attach to LSP Server"
       ]
     }

@@ -1,0 +1,21 @@
+// Forward reference: User references Role before it's defined
+type User {
+  role: Role
+  status: Status
+}
+
+enum Role {
+  Admin
+  Editor
+  Viewer
+}
+
+type Post {
+  author: User
+  status: Status
+}
+
+enum Status {
+  Draft
+  Published
+}

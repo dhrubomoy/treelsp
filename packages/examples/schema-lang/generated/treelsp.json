@@ -1,0 +1,12 @@
+{
+  "name": "SchemaLang",
+  "languageId": "schemalang",
+  "fileExtensions": [
+    ".schema"
+  ],
+  "server": "./server.bundle.cjs",
+  "queries": {
+    "highlights": "./queries/highlights.scm",
+    "locals": "./queries/locals.scm"
+  }
+}
