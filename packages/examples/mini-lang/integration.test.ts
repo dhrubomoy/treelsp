@@ -274,7 +274,7 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(unresolvedErrors).toHaveLength(0);
     });
 
-    it('resolves when file with reference is opened before declaring file', async () => {
+    it('resolves when file with reference is opened before declaring file', () => {
       const service2 = createServer(definition);
 
       // Open file 2 FIRST (references globalVar)
