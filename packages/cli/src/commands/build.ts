@@ -18,7 +18,7 @@ export async function build() {
     if (!existsSync(grammarPath)) {
       spinner.fail('generated/grammar.js not found');
       console.log(pc.dim('\nRun "treelsp generate" first to create grammar.js'));
-      process.exit(1);
+      throw new Error('generated/grammar.js not found');
     }
 
     // 2. Check tree-sitter CLI is installed
@@ -29,7 +29,7 @@ export async function build() {
       console.log(pc.dim('\nInstall tree-sitter CLI:'));
       console.log(pc.dim('  npm install -g tree-sitter-cli'));
       console.log(pc.dim('  or: cargo install tree-sitter-cli'));
-      process.exit(1);
+      throw new Error('tree-sitter CLI not found');
     }
 
     // 3. Run tree-sitter generate (generates C parser from grammar.js)
@@ -72,7 +72,7 @@ export async function build() {
     );
     if (wasmFiles.length === 0) {
       spinner.fail('tree-sitter build --wasm did not produce a .wasm file');
-      process.exit(1);
+      throw new Error('No .wasm file produced');
     }
     const sourceWasm = resolve(cwd, wasmFiles[0]!);
     const destWasm = resolve(cwd, 'generated', 'grammar.wasm');
@@ -139,7 +139,7 @@ export async function build() {
       outfile: bundlePath,
       sourcemap: true,
       nodePaths: [resolve(treelspPkg, 'node_modules')],
-      logLevel: 'silent',
+      logLevel: 'warning',
     });
 
     // esbuild replaces import.meta with an empty object in CJS mode,
@@ -173,9 +173,20 @@ export async function build() {
     spinner.fail('Build failed');
 
     if (error instanceof Error) {
+      // esbuild rejects with an errors array
+      const esbuildError = error as Error & { errors?: Array<{ text: string; location?: { file: string; line: number } }> };
       // execSync throws with stderr in the error object
       const execError = error as Error & { stderr?: Buffer };
-      if (execError.stderr) {
+
+      if (esbuildError.errors && esbuildError.errors.length > 0) {
+        console.error(pc.red('\nServer bundling failed:'));
+        for (const err of esbuildError.errors) {
+          const loc = err.location
+            ? ` (${err.location.file}:${err.location.line})`
+            : '';
+          console.error(pc.dim(`  ${err.text}${loc}`));
+        }
+      } else if (execError.stderr) {
         const stderr = execError.stderr.toString();
         console.error(pc.red('\nTree-sitter error:'));
         console.error(pc.dim(stderr));
@@ -191,6 +202,6 @@ export async function build() {
       }
     }
 
-    process.exit(1);
+    throw error;
   }
 }

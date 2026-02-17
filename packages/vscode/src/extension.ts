@@ -5,11 +5,13 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
   TransportKind,
+  State,
 } from 'vscode-languageclient/node';
 
 /** treelsp.json manifest shape */
@@ -99,11 +101,17 @@ async function readManifest(fsPath: string): Promise<TreelspManifest | null> {
     const data = JSON.parse(doc.getText()) as TreelspManifest;
 
     if (!data.name || !data.languageId || !data.fileExtensions || !data.server) {
+      void vscode.window.showWarningMessage(
+        `treelsp: Invalid manifest at ${fsPath} — missing required fields. Run "treelsp generate".`
+      );
       return null;
     }
 
     return data;
-  } catch {
+  } catch (e) {
+    void vscode.window.showWarningMessage(
+      `treelsp: Failed to read manifest at ${fsPath}: ${e instanceof Error ? e.message : String(e)}`
+    );
     return null;
   }
 }
@@ -123,6 +131,14 @@ async function startLanguageClient(
 
   const generatedDir = path.dirname(manifestPath);
   const serverModule = path.resolve(generatedDir, manifest.server);
+
+  // Check server bundle exists before attempting to start
+  if (!fs.existsSync(serverModule)) {
+    void vscode.window.showErrorMessage(
+      `treelsp: Server bundle not found for ${manifest.name}. Run "treelsp build" to generate it.`
+    );
+    return;
+  }
 
   const serverOptions: ServerOptions = {
     run: {
@@ -157,8 +173,24 @@ async function startLanguageClient(
     clientOptions
   );
 
+  // Detect unexpected server crashes
+  client.onDidChangeState((event) => {
+    if (event.oldState === State.Running && event.newState === State.Stopped) {
+      void vscode.window.showWarningMessage(
+        `treelsp: ${manifest.name} language server stopped unexpectedly. Check the "treelsp: ${manifest.name}" output channel for details.`
+      );
+    }
+  });
+
   clients.set(manifestPath, client);
   context.subscriptions.push(client);
 
-  await client.start();
+  try {
+    await client.start();
+  } catch (e) {
+    clients.delete(manifestPath);
+    void vscode.window.showErrorMessage(
+      `treelsp: Failed to start ${manifest.name} language server: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
 }

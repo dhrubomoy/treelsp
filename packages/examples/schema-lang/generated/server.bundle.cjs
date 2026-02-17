@@ -13596,9 +13596,11 @@ function startStdioServer(options) {
   const service = createServer(definition);
   const documentStates = /* @__PURE__ */ new Map();
   const pendingInits = /* @__PURE__ */ new Map();
+  let wasmError = null;
   async function getDocumentState(textDoc) {
     const existing = documentStates.get(textDoc.uri);
     if (existing) return existing;
+    if (wasmError) return null;
     let promise = pendingInits.get(textDoc.uri);
     if (!promise) {
       promise = createDocumentState(wasmPath2, {
@@ -13608,10 +13610,19 @@ function startStdioServer(options) {
       }, textDoc.getText());
       pendingInits.set(textDoc.uri, promise);
     }
-    const state2 = await promise;
-    documentStates.set(textDoc.uri, state2);
-    pendingInits.delete(textDoc.uri);
-    return state2;
+    try {
+      const state2 = await promise;
+      documentStates.set(textDoc.uri, state2);
+      pendingInits.delete(textDoc.uri);
+      return state2;
+    } catch (error) {
+      pendingInits.delete(textDoc.uri);
+      const msg = error instanceof Error ? error.message : String(error);
+      wasmError = msg;
+      connection.console.error(`[treelsp] Failed to load grammar: ${msg}`);
+      connection.window.showErrorMessage(`treelsp: Failed to load grammar. Run "treelsp build" to generate grammar.wasm.`);
+      return null;
+    }
   }
   const severityMap = {
     error: import_main.DiagnosticSeverity.Error,
@@ -13621,6 +13632,28 @@ function startStdioServer(options) {
   };
   async function validateDocument(textDoc) {
     const state2 = await getDocumentState(textDoc);
+    if (!state2) {
+      if (wasmError) connection.sendDiagnostics({
+        uri: textDoc.uri,
+        version: textDoc.version,
+        diagnostics: [{
+          range: {
+            start: {
+              line: 0,
+              character: 0
+            },
+            end: {
+              line: 0,
+              character: 0
+            }
+          },
+          severity: import_main.DiagnosticSeverity.Error,
+          message: `Grammar not loaded. Run "treelsp build" to generate grammar.wasm.`,
+          source: langId
+        }]
+      });
+      return;
+    }
     const diagnostics = service.computeDiagnostics(state2);
     connection.console.log(`[validation] ${diagnostics.map((d) => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`).join(", ")}`);
     connection.sendDiagnostics({
@@ -13662,6 +13695,7 @@ function startStdioServer(options) {
   textDocuments.onDidChangeContent(async (event) => {
     connection.console.log(`[change] ${event.document.uri} v${event.document.version}`);
     const state2 = await getDocumentState(event.document);
+    if (!state2) return;
     state2.update(event.document.getText(), event.document.version);
     service.documents.change(state2);
     await validateDocument(event.document);
@@ -13679,18 +13713,24 @@ function startStdioServer(options) {
     });
   });
   connection.onHover(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return null;
-    const state2 = await getDocumentState(textDoc);
-    const result = service.provideHover(state2, params.position);
-    if (!result) return null;
-    return {
-      contents: {
-        kind: "markdown",
-        value: result.contents
-      },
-      range: result.range
-    };
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return null;
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return null;
+      const result = service.provideHover(state2, params.position);
+      if (!result) return null;
+      return {
+        contents: {
+          kind: "markdown",
+          value: result.contents
+        },
+        range: result.range
+      };
+    } catch (e) {
+      connection.console.error(`[hover] error: ${String(e)}`);
+      return null;
+    }
   });
   connection.onDefinition(async (params) => {
     const textDoc = textDocuments.get(params.textDocument.uri);
@@ -13700,6 +13740,7 @@ function startStdioServer(options) {
     }
     try {
       const state2 = await getDocumentState(textDoc);
+      if (!state2) return null;
       const pos = params.position;
       const node = state2.root.descendantForPosition(pos);
       connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${getRangeStr(node.startPosition, node.endPosition)}`);
@@ -13723,6 +13764,7 @@ function startStdioServer(options) {
     }
     try {
       const state2 = await getDocumentState(textDoc);
+      if (!state2) return [];
       const pos = params.position;
       const node = state2.root.descendantForPosition(pos);
       connection.console.log(`[references] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
@@ -13738,53 +13780,83 @@ function startStdioServer(options) {
     }
   });
   connection.onCompletion(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return [];
-    const state2 = await getDocumentState(textDoc);
-    const items = service.provideCompletion(state2, params.position);
-    return items.map(toLspCompletionItem);
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return [];
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return [];
+      const items = service.provideCompletion(state2, params.position);
+      return items.map(toLspCompletionItem);
+    } catch (e) {
+      connection.console.error(`[completion] error: ${String(e)}`);
+      return [];
+    }
   });
   connection.onPrepareRename(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return null;
-    const state2 = await getDocumentState(textDoc);
-    return service.prepareRename(state2, params.position);
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return null;
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return null;
+      return service.prepareRename(state2, params.position);
+    } catch (e) {
+      connection.console.error(`[prepareRename] error: ${String(e)}`);
+      return null;
+    }
   });
   connection.onRenameRequest(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return null;
-    const state2 = await getDocumentState(textDoc);
-    const result = service.provideRename(state2, params.position, params.newName);
-    if (!result) return null;
-    const changes = {};
-    for (const [uri, edits] of Object.entries(result.changes)) changes[uri] = edits.map((e) => ({
-      range: e.range,
-      newText: e.newText
-    }));
-    return { changes };
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return null;
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return null;
+      const result = service.provideRename(state2, params.position, params.newName);
+      if (!result) return null;
+      const changes = {};
+      for (const [uri, edits] of Object.entries(result.changes)) changes[uri] = edits.map((e) => ({
+        range: e.range,
+        newText: e.newText
+      }));
+      return { changes };
+    } catch (e) {
+      connection.console.error(`[rename] error: ${String(e)}`);
+      return null;
+    }
   });
   connection.onDocumentSymbol(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return [];
-    const state2 = await getDocumentState(textDoc);
-    const symbols = service.provideSymbols(state2);
-    return symbols.map((s) => {
-      const sym = {
-        name: s.name,
-        kind: s.kindNumber,
-        range: s.range,
-        selectionRange: s.selectionRange,
-        children: []
-      };
-      if (s.detail) sym.detail = s.detail;
-      return sym;
-    });
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return [];
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return [];
+      const symbols = service.provideSymbols(state2);
+      return symbols.map((s) => {
+        const sym = {
+          name: s.name,
+          kind: s.kindNumber,
+          range: s.range,
+          selectionRange: s.selectionRange,
+          children: []
+        };
+        if (s.detail) sym.detail = s.detail;
+        return sym;
+      });
+    } catch (e) {
+      connection.console.error(`[symbols] error: ${String(e)}`);
+      return [];
+    }
   });
   connection.languages.semanticTokens.on(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) return { data: [] };
-    const state2 = await getDocumentState(textDoc);
-    return service.provideSemanticTokensFull(state2);
+    try {
+      const textDoc = textDocuments.get(params.textDocument.uri);
+      if (!textDoc) return { data: [] };
+      const state2 = await getDocumentState(textDoc);
+      if (!state2) return { data: [] };
+      return service.provideSemanticTokensFull(state2);
+    } catch (e) {
+      connection.console.error(`[semanticTokens] error: ${String(e)}`);
+      return { data: [] };
+    }
   });
   textDocuments.listen(connection);
   connection.listen();

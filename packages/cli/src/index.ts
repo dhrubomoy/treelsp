@@ -27,12 +27,24 @@ program
   .command('generate')
   .description('Generate grammar.js, AST types, and server from language definition')
   .option('-w, --watch', 'Watch for changes')
-  .action(generate);
+  .action(async (options: { watch?: boolean }) => {
+    try {
+      await generate(options);
+    } catch {
+      process.exit(1);
+    }
+  });
 
 program
   .command('build')
   .description('Compile grammar.js to WASM using Tree-sitter CLI')
-  .action(build);
+  .action(async () => {
+    try {
+      await build();
+    } catch {
+      process.exit(1);
+    }
+  });
 
 program
   .command('watch')

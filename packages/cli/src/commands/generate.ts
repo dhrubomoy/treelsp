@@ -21,7 +21,7 @@ export async function generate(options: { watch?: boolean }) {
     if (!existsSync(grammarPath)) {
       spinner.fail('Could not find grammar.ts in current directory');
       console.log(pc.dim('\nRun "treelsp init" to create a new language project'));
-      process.exit(1);
+      throw new Error('grammar.ts not found');
     }
 
     // 2. Dynamically import the language definition
@@ -32,7 +32,7 @@ export async function generate(options: { watch?: boolean }) {
     if (!definition || !definition.name || !definition.grammar) {
       spinner.fail('Invalid language definition');
       console.log(pc.dim('\nEnsure grammar.ts exports a valid language definition using defineLanguage()'));
-      process.exit(1);
+      throw new Error('Invalid language definition');
     }
 
     spinner.text = `Generating code for ${definition.name}...`;
@@ -79,6 +79,6 @@ export async function generate(options: { watch?: boolean }) {
       }
     }
 
-    process.exit(1);
+    throw error;
   }
 }
