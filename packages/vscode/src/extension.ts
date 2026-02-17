@@ -5,7 +5,6 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -19,13 +18,10 @@ interface TreelspManifest {
   languageId: string;
   fileExtensions: string[];
   server: string;
-}
-
-/** Language contribution in package.json */
-interface LanguageContribution {
-  id: string;
-  extensions: string[];
-  aliases: string[];
+  queries?: {
+    highlights: string;
+    locals: string;
+  };
 }
 
 /** Active language client per manifest path */
@@ -34,19 +30,6 @@ const clients = new Map<string, LanguageClient>();
 export async function activate(context: vscode.ExtensionContext) {
   // Discover treelsp projects in all workspace folders
   const manifests = await discoverManifests();
-
-  // Register languages in package.json if needed (requires reload)
-  const needsReload = syncLanguageContributions(manifests.map(m => m.manifest), context);
-  if (needsReload) {
-    const action = await vscode.window.showInformationMessage(
-      'treelsp discovered new languages. Reload window to activate language support.',
-      'Reload Window'
-    );
-    if (action === 'Reload Window') {
-      await vscode.commands.executeCommand('workbench.action.reloadWindow');
-    }
-    return;
-  }
 
   for (const { manifest, manifestPath } of manifests) {
     await startLanguageClient(manifest, manifestPath, context);
@@ -88,51 +71,6 @@ export async function deactivate(): Promise<void> {
   const stops = [...clients.values()].map(c => c.stop());
   await Promise.all(stops);
   clients.clear();
-}
-
-/**
- * Sync discovered languages into the extension's package.json contributes.languages.
- * VS Code only recognizes languages declared in package.json — there's no dynamic API.
- * Returns true if package.json was updated (reload needed).
- */
-function syncLanguageContributions(
-  manifests: TreelspManifest[],
-  context: vscode.ExtensionContext
-): boolean {
-  const pkgPath = path.join(context.extensionPath, 'package.json');
-
-  let pkg: Record<string, unknown>;
-  try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as Record<string, unknown>;
-  } catch {
-    return false;
-  }
-
-  const contributes = (pkg['contributes'] ?? {}) as Record<string, unknown>;
-  const existing = (contributes['languages'] ?? []) as LanguageContribution[];
-  const existingIds = new Set(existing.map(l => l.id));
-
-  const newLanguages: LanguageContribution[] = [];
-  for (const manifest of manifests) {
-    if (!existingIds.has(manifest.languageId)) {
-      newLanguages.push({
-        id: manifest.languageId,
-        extensions: manifest.fileExtensions,
-        aliases: [manifest.name],
-      });
-    }
-  }
-
-  if (newLanguages.length === 0) {
-    return false;
-  }
-
-  // Update package.json with new language contributions
-  contributes['languages'] = [...existing, ...newLanguages];
-  pkg['contributes'] = contributes;
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-
-  return true;
 }
 
 /**
@@ -200,10 +138,9 @@ async function startLanguageClient(
     },
   };
 
-  // Use both language ID and pattern selectors for maximum compatibility
+  // Pattern-only selectors — no registered language ID needed
   const documentSelector = manifest.fileExtensions.map(ext => ({
     scheme: 'file' as const,
-    language: manifest.languageId,
     pattern: `**/*${ext}`,
   }));
 

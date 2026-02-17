@@ -31,18 +31,7 @@
           "description": "Traces the communication between VS Code and the language server."
         }
       }
-    },
-    "languages": [
-      {
-        "id": "minilang",
-        "extensions": [
-          ".mini"
-        ],
-        "aliases": [
-          "MiniLang"
-        ]
-      }
-    ]
+    }
   },
   "repository": {
     "type": "git",
