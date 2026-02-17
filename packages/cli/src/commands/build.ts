@@ -146,6 +146,7 @@ export async function buildProject(project: ResolvedLanguageProject) {
       sourcemap: true,
       nodePaths: [resolve(treelspPkg, 'node_modules')],
       logLevel: 'warning',
+      logOverride: { 'empty-import-meta': 'silent' },
     });
 
     // esbuild replaces import.meta with an empty object in CJS mode,
