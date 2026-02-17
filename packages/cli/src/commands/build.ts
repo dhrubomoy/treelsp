@@ -4,11 +4,18 @@
 
 import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { resolve, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { build as esbuild } from 'esbuild';
 import ora from 'ora';
 import pc from 'picocolors';
 import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
+
+// Resolve the tree-sitter binary from the tree-sitter-cli dependency
+const treeSitterBin = resolve(
+  dirname(fileURLToPath(import.meta.resolve('tree-sitter-cli/cli.js'))),
+  'tree-sitter',
+);
 
 /**
  * Build a single language project: tree-sitter generate + build --wasm + bundle server.
@@ -42,7 +49,7 @@ export async function buildProject(project: ResolvedLanguageProject) {
     const relGrammarJs = relative(project.projectDir, grammarJsPath);
 
     try {
-      execSync(`tree-sitter generate ${relGrammarJs}`, {
+      execSync(`${treeSitterBin} generate ${relGrammarJs}`, {
         stdio: 'pipe',
         cwd: project.projectDir,
       });
@@ -54,7 +61,7 @@ export async function buildProject(project: ResolvedLanguageProject) {
 
     // 4. Run tree-sitter build --wasm (compiles to WebAssembly)
     spinner.text = `Compiling to WASM for ${label}...`;
-    execSync('tree-sitter build --wasm', {
+    execSync(`${treeSitterBin} build --wasm`, {
       stdio: 'pipe',
       cwd: project.projectDir,
     });
