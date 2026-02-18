@@ -9,6 +9,9 @@ import type { LanguageDefinition } from '../definition/index.js';
 // Mock connection object
 const mockConnection = {
   onInitialize: vi.fn(),
+  onDidOpenTextDocument: vi.fn(),
+  onDidChangeTextDocument: vi.fn(),
+  onDidCloseTextDocument: vi.fn(),
   onHover: vi.fn(),
   onDefinition: vi.fn(),
   onReferences: vi.fn(),
@@ -18,6 +21,8 @@ const mockConnection = {
   onDocumentSymbol: vi.fn(),
   sendDiagnostics: vi.fn(),
   listen: vi.fn(),
+  console: { log: vi.fn(), error: vi.fn() },
+  window: { showErrorMessage: vi.fn() },
   languages: {
     semanticTokens: {
       on: vi.fn(),
@@ -25,27 +30,13 @@ const mockConnection = {
   },
 };
 
-// Mock TextDocuments
-const mockTextDocuments = {
-  onDidOpen: vi.fn(),
-  onDidChangeContent: vi.fn(),
-  onDidClose: vi.fn(),
-  listen: vi.fn(),
-  get: vi.fn(),
-};
-
 vi.mock('vscode-languageserver/lib/node/main.js', () => ({
   createConnection: vi.fn(function () { return mockConnection; }),
-  TextDocuments: vi.fn(function () { return mockTextDocuments; }),
   ProposedFeatures: { all: [] },
-  TextDocumentSyncKind: { Full: 1 },
+  TextDocumentSyncKind: { Full: 1, Incremental: 2 },
   DiagnosticSeverity: { Error: 1, Warning: 2, Information: 3, Hint: 4 },
   SymbolKind: {},
   CompletionItemKind: {},
-}));
-
-vi.mock('vscode-languageserver-textdocument', () => ({
-  TextDocument: class {},
 }));
 
 // Minimal definition for testing
@@ -78,17 +69,17 @@ describe('startStdioServer', () => {
 
   it('creates connection and starts listening', async () => {
     await startServer();
-    expect(mockTextDocuments.listen).toHaveBeenCalledWith(mockConnection);
     expect(mockConnection.listen).toHaveBeenCalled();
   });
 
-  it('registers onInitialize handler', async () => {
+  it('registers onInitialize handler with incremental sync', async () => {
     await startServer();
     expect(mockConnection.onInitialize).toHaveBeenCalledOnce();
 
     // Call the handler to check capabilities
     const handler = mockConnection.onInitialize.mock.calls[0]![0] as () => unknown;
     const result = handler() as { capabilities: Record<string, unknown> };
+    expect(result.capabilities.textDocumentSync).toBe(2); // TextDocumentSyncKind.Incremental
     expect(result.capabilities.hoverProvider).toBe(true);
     expect(result.capabilities.definitionProvider).toBe(true);
     expect(result.capabilities.referencesProvider).toBe(true);
@@ -109,10 +100,10 @@ describe('startStdioServer', () => {
     expect(mockConnection.onDocumentSymbol).toHaveBeenCalledOnce();
   });
 
-  it('registers document lifecycle handlers', async () => {
+  it('registers document lifecycle handlers on connection', async () => {
     await startServer();
-    expect(mockTextDocuments.onDidOpen).toHaveBeenCalledOnce();
-    expect(mockTextDocuments.onDidChangeContent).toHaveBeenCalledOnce();
-    expect(mockTextDocuments.onDidClose).toHaveBeenCalledOnce();
+    expect(mockConnection.onDidOpenTextDocument).toHaveBeenCalledOnce();
+    expect(mockConnection.onDidChangeTextDocument).toHaveBeenCalledOnce();
+    expect(mockConnection.onDidCloseTextDocument).toHaveBeenCalledOnce();
   });
 });

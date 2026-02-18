@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { DocumentMetadata, TextEdit } from './tree.js';
+import type { DocumentMetadata, TextEdit, ContentChange } from './tree.js';
 
 describe('DocumentState', () => {
   describe('exports', () => {
@@ -42,6 +42,22 @@ describe('DocumentState', () => {
       expect(edit.newText).toBe('hello');
       expect(edit.range.start.line).toBe(0);
       expect(edit.range.end.character).toBe(5);
+    });
+  });
+
+  describe('ContentChange type', () => {
+    it('should accept valid ContentChange objects', () => {
+      const change: ContentChange = {
+        range: {
+          start: { line: 0, character: 4 },
+          end: { line: 0, character: 5 },
+        },
+        text: 'z',
+      };
+
+      expect(change.text).toBe('z');
+      expect(change.range.start.line).toBe(0);
+      expect(change.range.end.character).toBe(5);
     });
   });
 

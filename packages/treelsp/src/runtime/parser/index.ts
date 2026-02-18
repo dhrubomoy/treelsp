@@ -9,5 +9,6 @@ export {
   createDocumentState,
   type DocumentMetadata,
   type TextEdit,
+  type ContentChange,
 } from './tree.js';
 export { createParser, loadLanguage, preloadParser } from './wasm.js';

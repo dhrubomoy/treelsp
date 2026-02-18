@@ -23,7 +23,6 @@ export interface DocumentMetadata {
 
 /**
  * Text document edit (LSP format)
- * V2 preview: not used in v1 but API is ready
  */
 export interface TextEdit {
   range: {
@@ -34,13 +33,76 @@ export interface TextEdit {
 }
 
 /**
+ * Content change for incremental updates (matches LSP TextDocumentContentChangeEvent)
+ */
+export interface ContentChange {
+  /** Range being replaced */
+  range: {
+    start: Position;
+    end: Position;
+  };
+  /** New text for the range */
+  text: string;
+}
+
+/**
+ * Compute the character offset in text for a given Position.
+ * Consistent with the codebase convention of treating tree-sitter
+ * byte offsets as character offsets (works for ASCII; see node.ts:141).
+ */
+function charOffsetFromPosition(text: string, pos: Position): number {
+  let line = 0;
+  let i = 0;
+  while (line < pos.line && i < text.length) {
+    if (text.charCodeAt(i) === 10) { // '\n'
+      line++;
+    }
+    i++;
+  }
+  return i + pos.character;
+}
+
+/**
+ * Compute tree-sitter column (offset from line start) for a Position.
+ */
+function columnFromPosition(text: string, pos: Position): number {
+  // For ASCII text, column == character. For consistency with the existing
+  // codebase convention (node.ts toPosition), we use character directly.
+  // A future UTF-8-aware version would compute byte offset within the line.
+  return pos.character;
+}
+
+/**
+ * Compute the new end Point after inserting text at a given start position.
+ */
+function computeNewEndPoint(
+  startLine: number,
+  startColumn: number,
+  newText: string
+): { row: number; column: number } {
+  let row = startLine;
+  let column = startColumn;
+  for (let i = 0; i < newText.length; i++) {
+    if (newText.charCodeAt(i) === 10) { // '\n'
+      row++;
+      column = 0;
+    } else {
+      column++;
+    }
+  }
+  return { row, column };
+}
+
+/**
  * Document state with incremental parsing
  *
- * V1 strategy (DESIGN.md lines 16-24):
+ * Parsing strategy:
  * - Keystroke → Tree-sitter incremental CST reparse → full AST rebuild → full scope rebuild
- * - Tree-sitter's CST reparse is incremental automatically (via oldTree)
- * - AST and scope are full recompute (simple and correct)
- * - DocumentState.update() owns the boundary, designed for v2 incremental upgrade
+ * - When content changes are provided (via updateIncremental), tree.edit() is called
+ *   before reparsing with the old tree, enabling Tree-sitter's incremental CST reuse
+ * - When only full text is provided (via update), a full reparse is done
+ * - AST and scope are always full recompute (simple and correct)
+ * - DocumentState.update()/updateIncremental() own the boundary
  *
  * Memory management:
  * - Tree-sitter uses WASM memory that must be explicitly freed
@@ -89,14 +151,12 @@ export class DocumentState {
   /**
    * Parse or reparse the document
    *
-   * V1 strategy: Always parse from scratch (no incremental CST reuse).
-   * Tree-sitter's incremental parsing requires calling tree.edit() with
-   * precise byte-offset edit info before passing the old tree. Without it,
-   * tree-sitter reuses old nodes at wrong positions, producing garbled ASTs.
-   * V2 will add proper edit tracking to enable incremental parsing.
+   * @param oldTree Optional old tree for incremental parsing.
+   *   When provided (after tree.edit() has been called), Tree-sitter
+   *   reuses unchanged nodes for faster parsing.
    */
-  private reparse(): void {
-    const newTree = this.parser.parse(this.sourceText);
+  private reparse(oldTree?: Parser.Tree): void {
+    const newTree = this.parser.parse(this.sourceText, oldTree);
 
     // Delete old tree to free WASM memory
     if (this.tree) {
@@ -123,11 +183,10 @@ export class DocumentState {
   }
 
   /**
-   * Update document with new text (full replacement)
+   * Update document with new text (full replacement, no incremental reuse)
    *
-   * V1 API: Simple full text replacement
-   * Tree-sitter does incremental CST reparse automatically via oldTree
-   * We rebuild the full AST wrapper (simple and correct for v1)
+   * Use this when only the final text is known (no change ranges available).
+   * For incremental parsing with Tree-sitter CST reuse, use updateIncremental().
    *
    * @param newText New source text
    * @param newVersion Document version after update (optional, will auto-increment)
@@ -141,8 +200,63 @@ export class DocumentState {
       this.metadata.version++;
     }
 
-    // Full reparse (v1 strategy — no incremental CST, no tree.edit())
+    // Full reparse — no incremental CST reuse
     this.reparse();
+  }
+
+  /**
+   * Update document with incremental content changes
+   *
+   * Applies tree.edit() for each change before reparsing with the old tree,
+   * enabling Tree-sitter's incremental CST reuse. Changes are applied
+   * sequentially — each change is relative to the text after the previous change.
+   *
+   * @param changes Content changes (matches LSP TextDocumentContentChangeEvent with range)
+   * @param newVersion Document version after update (optional, will auto-increment)
+   */
+  updateIncremental(changes: ContentChange[], newVersion?: number): void {
+    if (!this.tree) {
+      throw new Error('Cannot update incrementally: no existing tree');
+    }
+
+    if (newVersion !== undefined) {
+      this.metadata.version = newVersion;
+    } else {
+      this.metadata.version++;
+    }
+
+    // Apply each change sequentially to both the tree and source text
+    for (const change of changes) {
+      const startCharOffset = charOffsetFromPosition(this.sourceText, change.range.start);
+      const endCharOffset = charOffsetFromPosition(this.sourceText, change.range.end);
+
+      const startColumn = columnFromPosition(this.sourceText, change.range.start);
+      const endColumn = columnFromPosition(this.sourceText, change.range.end);
+
+      const newEndPoint = computeNewEndPoint(
+        change.range.start.line,
+        startColumn,
+        change.text
+      );
+
+      this.tree.edit({
+        startIndex: startCharOffset,
+        oldEndIndex: endCharOffset,
+        newEndIndex: startCharOffset + change.text.length,
+        startPosition: { row: change.range.start.line, column: startColumn },
+        oldEndPosition: { row: change.range.end.line, column: endColumn },
+        newEndPosition: newEndPoint,
+      });
+
+      // Apply the text change
+      this.sourceText =
+        this.sourceText.slice(0, startCharOffset) +
+        change.text +
+        this.sourceText.slice(endCharOffset);
+    }
+
+    // Reparse with old tree for incremental CST reuse
+    this.reparse(this.tree);
   }
 
   /**

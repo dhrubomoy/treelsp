@@ -8,7 +8,6 @@
 
 import {
   createConnection,
-  TextDocuments,
   ProposedFeatures,
   TextDocumentSyncKind,
   DiagnosticSeverity,
@@ -17,11 +16,10 @@ import {
   type DocumentSymbol as LspDocumentSymbol,
   type CompletionItem as LspCompletionItem,
 } from 'vscode-languageserver/lib/node/main.js';
-import { Position, TextDocument } from 'vscode-languageserver-textdocument';
 import { createServer, createDocumentState, SEMANTIC_TOKEN_TYPES, SEMANTIC_TOKEN_MODIFIERS } from '../runtime/index.js';
 import { COMPLETION_KIND_MAP } from '../runtime/lsp/completion.js';
 import type { LanguageDefinition } from '../definition/index.js';
-import type { DocumentState } from '../runtime/parser/tree.js';
+import type { DocumentState, ContentChange } from '../runtime/parser/tree.js';
 import type { CompletionItem as InternalCompletionItem } from '../definition/lsp.js';
 
 /**
@@ -46,7 +44,12 @@ function toLspCompletionItem(item: InternalCompletionItem): LspCompletionItem {
   return lspItem;
 }
 
-function getRangeStr(start: Position, end: Position) {
+interface LspPosition {
+  line: number;
+  character: number;
+}
+
+function getRangeStr(start: LspPosition, end: LspPosition) {
   return `${start.line}:${start.character}-${end.line}:${end.character}`;
 }
 
@@ -66,13 +69,15 @@ export interface StdioServerOptions {
  * Creates a vscode-languageserver connection, wires all LSP protocol handlers
  * to a LanguageService, and starts listening. This is the main entry point
  * for generated LSP servers.
+ *
+ * Uses incremental text document sync to enable Tree-sitter's incremental
+ * CST reuse on each keystroke.
  */
 export function startStdioServer(options: StdioServerOptions): void {
   const { definition, wasmPath } = options;
   const langId = definition.name.toLowerCase();
 
   const connection = createConnection(ProposedFeatures.all);
-  const textDocuments = new TextDocuments(TextDocument);
   const service = createServer(definition);
   const documentStates = new Map<string, DocumentState>();
   // Promise cache prevents duplicate WASM init calls when concurrent requests
@@ -81,8 +86,12 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Tracks WASM load failure so we don't retry on every keystroke
   let wasmError: string | null = null;
 
-  async function getDocumentState(textDoc: TextDocument): Promise<DocumentState | null> {
-    const existing = documentStates.get(textDoc.uri);
+  async function initDocumentState(
+    uri: string,
+    version: number,
+    text: string
+  ): Promise<DocumentState | null> {
+    const existing = documentStates.get(uri);
     if (existing) return existing;
 
     // If WASM already failed, don't retry on every request.
@@ -90,23 +99,23 @@ export function startStdioServer(options: StdioServerOptions): void {
     if (wasmError) return null;
 
     // Deduplicate: reuse in-flight init for the same URI
-    let promise = pendingInits.get(textDoc.uri);
+    let promise = pendingInits.get(uri);
     if (!promise) {
       promise = createDocumentState(wasmPath, {
-        uri: textDoc.uri,
-        version: textDoc.version,
+        uri,
+        version,
         languageId: langId,
-      }, textDoc.getText());
-      pendingInits.set(textDoc.uri, promise);
+      }, text);
+      pendingInits.set(uri, promise);
     }
 
     try {
       const state = await promise;
-      documentStates.set(textDoc.uri, state);
-      pendingInits.delete(textDoc.uri);
+      documentStates.set(uri, state);
+      pendingInits.delete(uri);
       return state;
     } catch (error) {
-      pendingInits.delete(textDoc.uri);
+      pendingInits.delete(uri);
       const msg = error instanceof Error ? error.message : String(error);
       wasmError = msg;
       connection.console.error(`[treelsp] Failed to load grammar: ${msg}`);
@@ -124,14 +133,14 @@ export function startStdioServer(options: StdioServerOptions): void {
     hint: DiagnosticSeverity.Hint,
   } as const;
 
-  async function validateDocument(textDoc: TextDocument): Promise<void> {
-    const state = await getDocumentState(textDoc);
+  function validateDocument(uri: string, version: number): void {
+    const state = documentStates.get(uri);
     if (!state) {
       // Show a diagnostic so the user sees the problem in the editor
       if (wasmError) {
         void connection.sendDiagnostics({
-          uri: textDoc.uri,
-          version: textDoc.version,
+          uri,
+          version,
           diagnostics: [{
             range: {
               start: { line: 0, character: 0 },
@@ -148,8 +157,8 @@ export function startStdioServer(options: StdioServerOptions): void {
     const diagnostics = service.computeDiagnostics(state);
     connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`).join(', ')}`)
     void connection.sendDiagnostics({
-      uri: textDoc.uri,
-      version: textDoc.version,
+      uri,
+      version,
       diagnostics: diagnostics.map(d => {
         const lspDiag: { range: typeof d.range; severity: typeof severityMap[typeof d.severity]; message: string; code?: string; source: string } = {
           range: d.range,
@@ -168,7 +177,7 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Initialize
   connection.onInitialize(() => ({
     capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Full,
+      textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
@@ -185,40 +194,62 @@ export function startStdioServer(options: StdioServerOptions): void {
     },
   }));
 
-  // Document open
-  textDocuments.onDidOpen(async (event) => {
-    connection.console.log(`[open] ${event.document.uri} v${event.document.version}`);
-    await validateDocument(event.document);
-    connection.console.log(`[open] done ${event.document.uri}`);
+  // Document open — receive full text
+  connection.onDidOpenTextDocument((params) => {
+    const { uri, version, text } = params.textDocument;
+    connection.console.log(`[open] ${uri} v${version}`);
+    void initDocumentState(uri, version, text).then((state) => {
+      if (state) {
+        service.documents.open(state);
+      }
+      validateDocument(uri, version);
+      connection.console.log(`[open] done ${uri}`);
+    });
   });
 
-  // Document change
-  textDocuments.onDidChangeContent(async (event) => {
-    connection.console.log(`[change] ${event.document.uri} v${event.document.version}`);
-    const state = await getDocumentState(event.document);
+  // Document change — receive incremental content changes
+  connection.onDidChangeTextDocument((params) => {
+    const { uri, version } = params.textDocument;
+    connection.console.log(`[change] ${uri} v${version}`);
+    const state = documentStates.get(uri);
     if (!state) return;
-    state.update(event.document.getText(), event.document.version);
+
+    // Check if this is a full-text change (no range = full replacement)
+    const firstChange = params.contentChanges[0];
+    if (firstChange && !('range' in firstChange)) {
+      // Full content change — use non-incremental update
+      state.update(firstChange.text, version);
+    } else {
+      // Incremental changes — use tree.edit() + incremental reparse
+      const changes: ContentChange[] = params.contentChanges
+        .filter((c): c is typeof c & { range: { start: LspPosition; end: LspPosition } } => 'range' in c)
+        .map(c => ({
+          range: c.range,
+          text: c.text,
+        }));
+      state.updateIncremental(changes, version);
+    }
+
     service.documents.change(state);
-    await validateDocument(event.document);
+    validateDocument(uri, version);
   });
 
   // Document close
-  textDocuments.onDidClose((event) => {
-    const state = documentStates.get(event.document.uri);
+  connection.onDidCloseTextDocument((params) => {
+    const uri = params.textDocument.uri;
+    const state = documentStates.get(uri);
     if (state) {
-      service.documents.close(event.document.uri);
+      service.documents.close(uri);
       state.dispose();
-      documentStates.delete(event.document.uri);
+      documentStates.delete(uri);
     }
-    void connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
+    void connection.sendDiagnostics({ uri, diagnostics: [] });
   });
 
   // Hover
-  connection.onHover(async (params) => {
+  connection.onHover((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return null;
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return null;
       const result = service.provideHover(state, params.position);
       if (!result) return null;
@@ -233,15 +264,13 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Definition
-  connection.onDefinition(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) {
-      connection.console.log(`[definition] no textDoc for ${params.textDocument.uri}`);
+  connection.onDefinition((params) => {
+    const state = documentStates.get(params.textDocument.uri);
+    if (!state) {
+      connection.console.log(`[definition] no state for ${params.textDocument.uri}`);
       return null;
     }
     try {
-      const state = await getDocumentState(textDoc);
-      if (!state) return null;
       const pos = params.position;
       const node = state.root.descendantForPosition(pos);
       connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${getRangeStr(node.startPosition, node.endPosition)}`);
@@ -256,15 +285,13 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // References
-  connection.onReferences(async (params) => {
-    const textDoc = textDocuments.get(params.textDocument.uri);
-    if (!textDoc) {
-      connection.console.log(`[references] no textDoc for ${params.textDocument.uri}`);
+  connection.onReferences((params) => {
+    const state = documentStates.get(params.textDocument.uri);
+    if (!state) {
+      connection.console.log(`[references] no state for ${params.textDocument.uri}`);
       return [];
     }
     try {
-      const state = await getDocumentState(textDoc);
-      if (!state) return [];
       const pos = params.position;
       const node = state.root.descendantForPosition(pos);
       connection.console.log(`[references] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
@@ -278,11 +305,9 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Completion
-  connection.onCompletion(async (params) => {
+  connection.onCompletion((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return [];
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return [];
       const items = service.provideCompletion(state, params.position);
       return items.map(toLspCompletionItem);
@@ -293,11 +318,9 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Prepare rename
-  connection.onPrepareRename(async (params) => {
+  connection.onPrepareRename((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return null;
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return null;
       return service.prepareRename(state, params.position);
     } catch (e) {
@@ -307,11 +330,9 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Rename
-  connection.onRenameRequest(async (params) => {
+  connection.onRenameRequest((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return null;
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return null;
       const result = service.provideRename(state, params.position, params.newName);
       if (!result) return null;
@@ -327,11 +348,9 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Document symbols
-  connection.onDocumentSymbol(async (params) => {
+  connection.onDocumentSymbol((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return [];
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return [];
       const symbols = service.provideSymbols(state);
       return symbols.map((s): LspDocumentSymbol => {
@@ -354,11 +373,9 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Semantic tokens
-  connection.languages.semanticTokens.on(async (params) => {
+  connection.languages.semanticTokens.on((params) => {
     try {
-      const textDoc = textDocuments.get(params.textDocument.uri);
-      if (!textDoc) return { data: [] };
-      const state = await getDocumentState(textDoc);
+      const state = documentStates.get(params.textDocument.uri);
       if (!state) return { data: [] };
       return service.provideSemanticTokensFull(state);
     } catch (e) {
@@ -368,6 +385,5 @@ export function startStdioServer(options: StdioServerOptions): void {
   });
 
   // Start listening
-  textDocuments.listen(connection);
   connection.listen();
 }

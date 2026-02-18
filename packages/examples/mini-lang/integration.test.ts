@@ -318,4 +318,257 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(defResult!.uri).toBe('file:///test.mini');
     });
   });
+
+  // ========== Incremental Parsing Tests ==========
+
+  describe('incremental parsing', () => {
+    const metadata = { uri: 'file:///incr.mini', version: 1, languageId: 'minilang' };
+
+    it('single character replacement produces correct AST', async () => {
+      // Start: "let x = 10;"  →  Change 'x' to 'z'  →  "let z = 10;"
+      const doc = await createDocumentState(wasmPath, metadata, 'let x = 10;');
+      try {
+        expect(doc.root.type).toBe('program');
+        const varsBefore = doc.root.descendantsOfType('variable_decl');
+        expect(varsBefore[0]!.field('name')!.text).toBe('x');
+
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+          text: 'z',
+        }]);
+
+        expect(doc.text).toBe('let z = 10;');
+        expect(doc.version).toBe(2);
+        expect(doc.hasErrors).toBe(false);
+        const varsAfter = doc.root.descendantsOfType('variable_decl');
+        expect(varsAfter[0]!.field('name')!.text).toBe('z');
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('matches full reparse result', async () => {
+      const source = 'let x = 10;\nlet y = 20;';
+      const incrDoc = await createDocumentState(wasmPath, { ...metadata, uri: 'file:///incr1.mini' }, source);
+      const fullDoc = await createDocumentState(wasmPath, { ...metadata, uri: 'file:///full1.mini' }, 'let z = 10;\nlet y = 20;');
+      try {
+        // Incremental: change 'x' to 'z'
+        incrDoc.updateIncremental([{
+          range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+          text: 'z',
+        }]);
+
+        expect(incrDoc.text).toBe(fullDoc.text);
+        expect(incrDoc.root.toString()).toBe(fullDoc.root.toString());
+      } finally {
+        incrDoc.dispose();
+        fullDoc.dispose();
+      }
+    });
+
+    it('handles insertion (adding text)', async () => {
+      // Start: "let x = 10;"  →  Insert "let y = 20;\n" before it
+      const doc = await createDocumentState(wasmPath, metadata, 'let x = 10;');
+      try {
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          text: 'let y = 20;\n',
+        }]);
+
+        expect(doc.text).toBe('let y = 20;\nlet x = 10;');
+        expect(doc.hasErrors).toBe(false);
+        const vars = doc.root.descendantsOfType('variable_decl');
+        expect(vars).toHaveLength(2);
+        expect(vars[0]!.field('name')!.text).toBe('y');
+        expect(vars[1]!.field('name')!.text).toBe('x');
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('handles deletion (removing text)', async () => {
+      // Start: "let x = 10;\nlet y = 20;"  →  Delete first line
+      const doc = await createDocumentState(wasmPath, metadata, 'let x = 10;\nlet y = 20;');
+      try {
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
+          text: '',
+        }]);
+
+        expect(doc.text).toBe('let y = 20;');
+        expect(doc.hasErrors).toBe(false);
+        const vars = doc.root.descendantsOfType('variable_decl');
+        expect(vars).toHaveLength(1);
+        expect(vars[0]!.field('name')!.text).toBe('y');
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('handles multi-line replacement', async () => {
+      // Replace the whole body of a function
+      const source = 'fn add(a, b) {\n  return a + b;\n}';
+      const doc = await createDocumentState(wasmPath, metadata, source);
+      try {
+        // Replace "return a + b;" with "return a * b;"
+        doc.updateIncremental([{
+          range: { start: { line: 1, character: 9 }, end: { line: 1, character: 14 } },
+          text: 'a * b',
+        }]);
+
+        expect(doc.text).toBe('fn add(a, b) {\n  return a * b;\n}');
+        expect(doc.hasErrors).toBe(false);
+        const returns = doc.root.descendantsOfType('return_statement');
+        expect(returns).toHaveLength(1);
+        // value field is the 'expression' wrapper; binary_expr is nested inside
+        const binaryExprs = doc.root.descendantsOfType('binary_expr');
+        expect(binaryExprs).toHaveLength(1);
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('handles multiple sequential changes in one update', async () => {
+      // Start: "let x = 10;\nlet y = 20;"
+      // Change 1: 'x' → 'a' (line 0, char 4-5)
+      // Change 2: 'y' → 'b' (line 1, char 4-5, but after change 1 the text is the same structure)
+      const doc = await createDocumentState(wasmPath, metadata, 'let x = 10;\nlet y = 20;');
+      try {
+        doc.updateIncremental([
+          {
+            range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+            text: 'a',
+          },
+          {
+            range: { start: { line: 1, character: 4 }, end: { line: 1, character: 5 } },
+            text: 'b',
+          },
+        ]);
+
+        expect(doc.text).toBe('let a = 10;\nlet b = 20;');
+        expect(doc.hasErrors).toBe(false);
+        const vars = doc.root.descendantsOfType('variable_decl');
+        expect(vars).toHaveLength(2);
+        expect(vars[0]!.field('name')!.text).toBe('a');
+        expect(vars[1]!.field('name')!.text).toBe('b');
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('preserves LSP features after incremental update', async () => {
+      const source = 'let x = 10;\nlet sum = x + 5;';
+      const doc = await createDocumentState(wasmPath, metadata, source);
+      const service = createServer(definition);
+      try {
+        service.documents.open(doc);
+
+        // Verify initial state: 'x' reference resolves
+        const diagsBefore = service.computeDiagnostics(doc);
+        const unresolvedBefore = diagsBefore.filter(d => d.code === 'unresolved-reference');
+        expect(unresolvedBefore).toHaveLength(0);
+
+        // Incrementally rename 'x' to 'z' in declaration (line 0, char 4-5)
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+          text: 'z',
+        }]);
+        service.documents.change(doc);
+
+        // Now 'x' in sum is unresolved (declaration is 'z' but reference is still 'x')
+        const diagsAfter = service.computeDiagnostics(doc);
+        const unresolvedAfter = diagsAfter.filter(d => d.code === 'unresolved-reference');
+        expect(unresolvedAfter).toHaveLength(1);
+
+        // Fix: rename 'x' to 'z' in the reference too (line 1, char 10-11)
+        doc.updateIncremental([{
+          range: { start: { line: 1, character: 10 }, end: { line: 1, character: 11 } },
+          text: 'z',
+        }]);
+        service.documents.change(doc);
+
+        expect(doc.text).toBe('let z = 10;\nlet sum = z + 5;');
+        const diagsFinal = service.computeDiagnostics(doc);
+        const unresolvedFinal = diagsFinal.filter(d => d.code === 'unresolved-reference');
+        expect(unresolvedFinal).toHaveLength(0);
+
+        // Hover on 'z' declaration should work
+        const hover = service.provideHover(doc, { line: 0, character: 4 });
+        expect(hover).not.toBeNull();
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('handles adding a new function', async () => {
+      const source = 'let x = 10;';
+      const doc = await createDocumentState(wasmPath, metadata, source);
+      try {
+        // Append a function declaration
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 11 }, end: { line: 0, character: 11 } },
+          text: '\nfn double(n) {\n  return n + n;\n}',
+        }]);
+
+        expect(doc.hasErrors).toBe(false);
+        const fns = doc.root.descendantsOfType('function_decl');
+        expect(fns).toHaveLength(1);
+        expect(fns[0]!.field('name')!.text).toBe('double');
+        const params = doc.root.descendantsOfType('parameter');
+        expect(params).toHaveLength(1);
+        expect(params[0]!.field('name')!.text).toBe('n');
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('version increments correctly', async () => {
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///ver.mini', version: 1, languageId: 'minilang' },
+        'let x = 10;',
+      );
+      try {
+        expect(doc.version).toBe(1);
+
+        // With explicit version
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+          text: 'y',
+        }], 5);
+        expect(doc.version).toBe(5);
+
+        // Without explicit version (auto-increment)
+        doc.updateIncremental([{
+          range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+          text: 'z',
+        }]);
+        expect(doc.version).toBe(6);
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('handles rapid sequential updates (simulating typing)', async () => {
+      // Simulate typing "let abc = 1;" character by character starting from empty
+      const doc = await createDocumentState(wasmPath, metadata, '');
+      try {
+        const chars = 'let abc = 1;';
+        for (let i = 0; i < chars.length; i++) {
+          doc.updateIncremental([{
+            range: { start: { line: 0, character: i }, end: { line: 0, character: i } },
+            text: chars[i]!,
+          }]);
+        }
+
+        expect(doc.text).toBe('let abc = 1;');
+        expect(doc.hasErrors).toBe(false);
+        const vars = doc.root.descendantsOfType('variable_decl');
+        expect(vars).toHaveLength(1);
+        expect(vars[0]!.field('name')!.text).toBe('abc');
+      } finally {
+        doc.dispose();
+      }
+    });
+  });
 });

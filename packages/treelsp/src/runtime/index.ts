@@ -11,6 +11,7 @@ export {
   createDocumentState,
   type DocumentMetadata,
   type TextEdit,
+  type ContentChange,
 } from './parser/index.js';
 export { createParser, loadLanguage, preloadParser } from './parser/index.js';
 
