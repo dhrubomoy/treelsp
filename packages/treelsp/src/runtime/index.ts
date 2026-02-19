@@ -38,3 +38,4 @@ export {
   SEMANTIC_TOKEN_TYPES,
   SEMANTIC_TOKEN_MODIFIERS,
 } from './lsp/semantic-tokens.js';
+export { type SignatureHelpResult } from './lsp/signature-help.js';

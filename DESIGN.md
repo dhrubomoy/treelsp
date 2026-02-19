@@ -940,13 +940,13 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Bugs — Fix Before Any User Touches This
 
-- [ ] **`ctx.declarationsOf()` ignores its argument** — `diagnostics.ts` `createValidationContext` closes over the wrong `node` variable; `ctx.declarationsOf(someOtherNode)` always returns declarations for the context node
-- [ ] **`treelsp init` generates broken `tsconfig.json`** — references `treelsp/tsconfig.base.json` which is not exported or in the `files` array
-- [ ] **`init` hardcodes `^0.0.1`** — scaffolded `package.json` pins to wrong version after any release; should derive from CLI's own version at runtime
-- [ ] **`defaults` export shape doesn't match README** — README shows `defaults.lsp.hover(node, ctx)` but `defaults/index.ts` has no `.lsp` sub-object; documented example throws at runtime
-- [ ] **Signature help defined but never wired** — `LspRule.signature` and `SignatureDescriptor` exist in types, but `connection.onSignatureHelp` is never registered in `server/index.ts`
+- [x] **`ctx.declarationsOf()` ignores its argument** — fixed: now uses `_target` parameter instead of closure variable
+- [x] **`treelsp init` generates broken `tsconfig.json`** — fixed: generates standalone tsconfig instead of broken `extends`
+- [x] **`init` hardcodes `^0.0.1`** — fixed: reads CLI package version at runtime
+- [x] **`defaults` export shape doesn't match README** — fixed: restructured to `defaults.lsp.hover` / `defaults.validation.$references`
+- [x] **Signature help defined but never wired** — fixed: `provideSignatureHelp` handler + `connection.onSignatureHelp` + trigger characters
 - [ ] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
-- [ ] **`vscode-languageserver-textdocument` is an unused dependency**
+- [x] **`vscode-languageserver-textdocument` is an unused dependency** — removed
 
 ### Missing Grammar Features — Blocks Real Languages
 
@@ -962,7 +962,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **No folding ranges** (`textDocument/foldingRange`)
 - [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
 - [ ] **No completion trigger characters** — completions don't auto-trigger on `.` or `(`; must be language-defined
-- [ ] **No signature help handler** — types exist, server wiring doesn't
+- [x] **No signature help handler** — fixed: handler + trigger characters from lsp config
 
 ### DX & Robustness
 

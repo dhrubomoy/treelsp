@@ -175,7 +175,7 @@ function collectValidationDiagnostics(
   );
 
   // Build ValidationContext that collects diagnostics
-  function createValidationContext(node: ASTNode): ValidationContext {
+  function createValidationContext(_node: ASTNode): ValidationContext {
     return {
       error(target: ASTNode, message: string, options?: DiagnosticOptions) {
         addValidationDiagnostic('error', target, message, options, diagnostics);
@@ -192,8 +192,7 @@ function collectValidationDiagnostics(
       resolve: (n: ASTNode) => lspContext.resolve(n),
       scopeOf: (n: ASTNode) => lspContext.scopeOf(n),
       declarationsOf(_target: ASTNode): any[] {
-        // Find declarations for a scope node
-        const scope = lspContext.scopeOf(node);
+        const scope = lspContext.scopeOf(_target);
         return scope.allDeclarations();
       },
       referencesTo(_target: ASTNode): any[] {

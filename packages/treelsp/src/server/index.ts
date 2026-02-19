@@ -175,8 +175,8 @@ export function startStdioServer(options: StdioServerOptions): void {
   }
 
   // Initialize
-  connection.onInitialize(() => ({
-    capabilities: {
+  connection.onInitialize(() => {
+    const capabilities: Record<string, unknown> = {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
       definitionProvider: true,
@@ -191,8 +191,14 @@ export function startStdioServer(options: StdioServerOptions): void {
         },
         full: true,
       },
-    },
-  }));
+    };
+    if (service.signatureTriggerCharacters.length > 0) {
+      capabilities.signatureHelpProvider = {
+        triggerCharacters: service.signatureTriggerCharacters,
+      };
+    }
+    return { capabilities };
+  });
 
   // Document open — receive full text
   connection.onDidOpenTextDocument((params) => {
@@ -314,6 +320,18 @@ export function startStdioServer(options: StdioServerOptions): void {
     } catch (e) {
       connection.console.error(`[completion] error: ${String(e)}`);
       return [];
+    }
+  });
+
+  // Signature help
+  connection.onSignatureHelp((params) => {
+    try {
+      const state = documentStates.get(params.textDocument.uri);
+      if (!state) return null;
+      return service.provideSignatureHelp(state, params.position);
+    } catch (e) {
+      connection.console.error(`[signatureHelp] error: ${String(e)}`);
+      return null;
     }
   });
 

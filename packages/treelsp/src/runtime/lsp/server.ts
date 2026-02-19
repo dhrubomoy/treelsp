@@ -15,6 +15,7 @@ import { provideCompletion } from './completion.js';
 import { prepareRename, provideRename, type PrepareRenameResult, type RenameResult } from './rename.js';
 import { provideSymbols, type DocumentSymbol } from './symbols.js';
 import { provideSemanticTokensFull, type SemanticTokensResult } from './semantic-tokens.js';
+import { provideSignatureHelp, getSignatureTriggerCharacters, type SignatureHelpResult } from './signature-help.js';
 import type { CompletionItem } from '../../definition/lsp.js';
 
 /**
@@ -54,6 +55,12 @@ export interface LanguageService {
 
   /** Semantic tokens (full document) */
   provideSemanticTokensFull(document: DocumentState): SemanticTokensResult;
+
+  /** Signature help */
+  provideSignatureHelp(document: DocumentState, position: Position): SignatureHelpResult | null;
+
+  /** Signature help trigger characters (from lsp config) */
+  signatureTriggerCharacters: string[];
 }
 
 /**
@@ -68,6 +75,7 @@ export function createServer(definition: LanguageDefinition): LanguageService {
   const validation = definition.validation;
 
   const documents = new DocumentManager(semantic);
+  const triggerChars = getSignatureTriggerCharacters(lsp);
 
   function getDocScope(document: DocumentState) {
     const wsDoc = documents.get(document.uri);
@@ -140,5 +148,12 @@ export function createServer(definition: LanguageDefinition): LanguageService {
       const docScope = getDocScope(document);
       return provideSemanticTokensFull(document, docScope, semantic, lsp);
     },
+
+    provideSignatureHelp(document: DocumentState, position: Position): SignatureHelpResult | null {
+      const docScope = getDocScope(document);
+      return provideSignatureHelp(document, position, docScope, lsp, documents.getWorkspace());
+    },
+
+    signatureTriggerCharacters: triggerChars,
   };
 }

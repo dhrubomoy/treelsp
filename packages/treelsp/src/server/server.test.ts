@@ -16,6 +16,7 @@ const mockConnection = {
   onDefinition: vi.fn(),
   onReferences: vi.fn(),
   onCompletion: vi.fn(),
+  onSignatureHelp: vi.fn(),
   onPrepareRename: vi.fn(),
   onRenameRequest: vi.fn(),
   onDocumentSymbol: vi.fn(),

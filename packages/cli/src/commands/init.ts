@@ -5,9 +5,25 @@
 import prompts from 'prompts';
 import ora from 'ora';
 import pc from 'picocolors';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Read the CLI package version at runtime so scaffolded projects
+ * always pin to the version of the CLI that created them.
+ */
+async function getCliVersion(): Promise<string> {
+  try {
+    const distDir = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = resolve(distDir, '..', 'package.json');
+    const pkg = JSON.parse(await readFile(pkgPath, 'utf-8')) as { version: string };
+    return pkg.version;
+  } catch {
+    return '0.0.1';
+  }
+}
 
 export async function init() {
   console.log(pc.bold('treelsp init\n'));
@@ -57,15 +73,17 @@ export async function init() {
     await mkdir(projectDir);
 
     // Generate package.json
+    const version = await getCliVersion();
+    const versionRange = `^${version}`;
     const packageJson = {
       name: name,
       version: '0.1.0',
       type: 'module',
       dependencies: {
-        treelsp: '^0.0.1',
+        treelsp: versionRange,
       },
       devDependencies: {
-        '@treelsp/cli': '^0.0.1',
+        '@treelsp/cli': versionRange,
         typescript: '^5.7.3',
       },
       scripts: {
@@ -83,8 +101,11 @@ export async function init() {
 
     // Generate tsconfig.json
     const tsconfig = {
-      extends: 'treelsp/tsconfig.base.json',
       compilerOptions: {
+        target: 'ES2022',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
         outDir: './dist',
       },
       include: ['grammar.ts'],
