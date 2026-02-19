@@ -3,8 +3,8 @@
  * Wires all handlers together into a language service object
  */
 
-import type { Position } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { Position } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { LanguageDefinition } from '../../definition/index.js';
 import { DocumentManager } from './documents.js';
 import { computeDiagnostics, type Diagnostic } from './diagnostics.js';

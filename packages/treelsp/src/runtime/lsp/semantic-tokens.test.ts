@@ -4,10 +4,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ASTNode } from '../parser/node.js';
+import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 import { Scope, type Declaration, type Reference } from '../scope/scope.js';
 import type { DocumentScope } from '../scope/resolver.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { DocumentState } from '../parser/tree-sitter/tree.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition } from '../../definition/lsp.js';
 import { provideSemanticTokensFull, SEMANTIC_TOKEN_TYPES } from './semantic-tokens.js';
@@ -68,7 +68,7 @@ function createMockNode(
   };
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  return new ASTNode(mockSyntaxNode);
+  return new TreeSitterASTNode(mockSyntaxNode);
 }
 
 function createMockDocument(root: ASTNode, uri = 'file:///test.ml'): DocumentState {

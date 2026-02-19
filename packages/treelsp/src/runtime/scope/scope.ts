@@ -3,7 +3,7 @@
  * Manages declarations and provides name resolution
  */
 
-import type { ASTNode } from '../parser/node.js';
+import type { ASTNode } from '../parser/ast-node.js';
 import type { ScopeKind, Visibility } from '../../definition/semantic.js';
 
 /**

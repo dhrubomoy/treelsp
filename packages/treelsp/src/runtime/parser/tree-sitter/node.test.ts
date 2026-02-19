@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ASTNode, type Position } from './node.js';
+import { TreeSitterASTNode, type Position } from './node.js';
 
 describe('ASTNode', () => {
   describe('exports', () => {
-    it('should export ASTNode class', () => {
-      expect(ASTNode).toBeDefined();
-      expect(typeof ASTNode).toBe('function');
+    it('should export TreeSitterASTNode class', () => {
+      expect(TreeSitterASTNode).toBeDefined();
+      expect(typeof TreeSitterASTNode).toBe('function');
     });
 
     it('should export Position interface type', () => {

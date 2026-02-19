@@ -21,6 +21,14 @@
     "./server": {
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
+    },
+    "./codegen/tree-sitter": {
+      "types": "./dist/codegen/tree-sitter/index.d.ts",
+      "import": "./dist/codegen/tree-sitter/index.js"
+    },
+    "./backend/tree-sitter": {
+      "types": "./dist/backend/tree-sitter/index.d.ts",
+      "import": "./dist/backend/tree-sitter/index.js"
     }
   },
   "files": [

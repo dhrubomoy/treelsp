@@ -3,8 +3,8 @@
  * Generates Tree-sitter highlights.scm from language definition
  */
 
-import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder, SemanticRule } from '../definition/index.js';
-import type { CompletionKind } from '../definition/lsp.js';
+import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder, SemanticRule } from '../../definition/index.js';
+import type { CompletionKind } from '../../definition/lsp.js';
 
 /**
  * Internal representation of rule nodes (shared with grammar.ts)

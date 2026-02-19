@@ -3,10 +3,10 @@ import type { DocumentMetadata, TextEdit, ContentChange } from './tree.js';
 
 describe('DocumentState', () => {
   describe('exports', () => {
-    it('should export DocumentState class', async () => {
-      const { DocumentState } = await import('./tree.js');
-      expect(DocumentState).toBeDefined();
-      expect(typeof DocumentState).toBe('function');
+    it('should export TreeSitterDocumentState class', async () => {
+      const { TreeSitterDocumentState } = await import('./tree.js');
+      expect(TreeSitterDocumentState).toBeDefined();
+      expect(typeof TreeSitterDocumentState).toBe('function');
     });
 
     it('should export createDocumentState function', async () => {

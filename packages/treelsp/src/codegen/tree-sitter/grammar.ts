@@ -3,7 +3,7 @@
  * Emits grammar.js for Tree-sitter from language definition
  */
 
-import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder } from '../definition/index.js';
+import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder } from '../../definition/index.js';
 
 /**
  * Internal representation of rule nodes

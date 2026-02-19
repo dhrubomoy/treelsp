@@ -3,7 +3,7 @@
  * Lists declarations with symbol descriptors for outline view
  */
 
-import type { Position } from '../parser/node.js';
+import type { Position } from '../parser/ast-node.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { LspDefinition, SymbolKind } from '../../definition/lsp.js';
 

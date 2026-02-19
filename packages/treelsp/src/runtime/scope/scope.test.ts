@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { Scope } from './scope.js';
-import { ASTNode } from '../parser/node.js';
+import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 
 // Mock ASTNode for testing
 function createMockNode(type: string, text: string): ASTNode {
@@ -40,7 +40,7 @@ function createMockNode(type: string, text: string): ASTNode {
   } as any;
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  return new ASTNode(mockSyntaxNode);
+  return new TreeSitterASTNode(mockSyntaxNode);
 }
 
 describe('Scope', () => {

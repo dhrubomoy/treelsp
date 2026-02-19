@@ -3,8 +3,8 @@
  * Classifies AST nodes into LSP semantic token types for syntax highlighting
  */
 
-import type { ASTNode } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition, LspRule, CompletionKind } from '../../definition/lsp.js';

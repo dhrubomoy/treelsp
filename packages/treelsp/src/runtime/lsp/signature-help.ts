@@ -3,8 +3,8 @@
  * Shows parameter information for function calls
  */
 
-import type { ASTNode, Position } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode, Position } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
 import type { LspDefinition } from '../../definition/lsp.js';

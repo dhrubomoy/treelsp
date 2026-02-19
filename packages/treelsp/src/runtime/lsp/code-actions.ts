@@ -3,7 +3,7 @@
  * Surfaces diagnostic fixes as quick-fix code actions
  */
 
-import type { Position } from '../parser/node.js';
+import type { Position } from '../parser/ast-node.js';
 import type { TextEdit } from '../../definition/validation.js';
 import type { Diagnostic } from './diagnostics.js';
 

@@ -3,7 +3,7 @@
  * Manages open documents, maintains workspace scope, and triggers reparse
  */
 
-import type { DocumentState } from '../parser/tree.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import { Workspace, type WorkspaceDocument } from '../scope/workspace.js';

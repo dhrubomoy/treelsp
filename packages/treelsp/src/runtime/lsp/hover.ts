@@ -3,8 +3,8 @@
  * Shows information when hovering over nodes
  */
 
-import type { Position } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { Position } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';

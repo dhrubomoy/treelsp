@@ -3,9 +3,8 @@
  * Collects parse errors, unresolved references, and custom validation results
  */
 
-import type { ASTNode } from '../parser/node.js';
-import type { Position } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode, Position } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
 import type { SemanticDefinition, UnresolvedPolicy } from '../../definition/semantic.js';
