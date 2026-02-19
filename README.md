@@ -1,15 +1,11 @@
 # treelsp
 
-A Langium-style LSP generator using Tree-sitter as the parsing backend.
+Define a programming language in TypeScript. Get a full Language Server for free.
 
-**Status:** Core implementation complete — integration testing phase
-
-## What Is treelsp?
-
-treelsp lets you define a programming language in TypeScript and automatically generates a full Language Server Protocol (LSP) implementation. You get:
+treelsp is a grammar-first LSP generator powered by [Tree-sitter](https://tree-sitter.github.io).
 
 - **Tree-sitter's parsing** — fast, error-tolerant, incremental, battle-tested
-- **Langium's developer experience** — grammar-first, generates a full LSP
+- **Grammar-first DX** — define grammar + semantics, get a full LSP
 - **TypeScript throughout** — no new DSLs to learn
 
 ## Quick Example
@@ -24,144 +20,185 @@ export default defineLanguage({
   word: 'identifier',
 
   grammar: {
-    program: r => r.repeat(r.rule('statement')),
-    statement: r => r.choice(
-      r.rule('variable_decl'),
-      r.rule('expr_statement'),
-    ),
-    variable_decl: r => r.seq(
-      'let',
-      r.field('name', r.rule('identifier')),
-      '=',
-      r.field('value', r.rule('expression')),
-      ';',
-    ),
-    // ... more rules
+    program:        r => r.repeat(r.rule('statement')),
+    statement:      r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
+    variable_decl:  r => r.seq('let', r.field('name', r.rule('identifier')), '=', r.field('value', r.rule('expression')), ';'),
+    expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
+    expression:     r => r.choice(r.rule('identifier'), r.rule('number')),
+    identifier:     r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
+    number:         r => r.token(/[0-9]+/),
   },
 
   semantic: {
-    program: { scope: 'global' },
-    variable_decl: {
-      declares: { field: 'name', scope: 'enclosing' },
+    program:       { scope: 'global' },
+    variable_decl: { declares: { field: 'name', scope: 'enclosing' } },
+    identifier:    { references: { field: 'name', to: 'variable_decl', onUnresolved: 'error' } },
+  },
+});
+```
+
+That's it. Out of the box you get: parse error diagnostics, unresolved reference diagnostics, go-to-definition, find references, rename, scope-based completion, keyword completion, hover, document symbols, and syntax highlighting.
+
+## How It Works
+
+From one `defineLanguage()` call, treelsp generates:
+
+```
+generated/
+  grammar.js           # Tree-sitter grammar
+  grammar.wasm         # compiled parser
+  ast.ts               # typed AST node interfaces
+  treelsp.json         # manifest for VS Code extension
+  server.bundle.cjs    # self-contained language server
+  queries/
+    highlights.scm     # syntax highlighting (Tree-sitter editors)
+    locals.scm         # scope queries (Tree-sitter editors)
+```
+
+The language server handles LSP features automatically. The `.scm` query files provide native syntax highlighting in Tree-sitter editors (Neovim, Helix, Zed). For VS Code, the server provides equivalent highlighting via LSP semantic tokens.
+
+## Getting Started
+
+```bash
+npm install -D treelsp @treelsp/cli
+
+treelsp init           # scaffold a new language project
+treelsp generate       # generate grammar, AST types, queries, manifest
+treelsp build          # compile WASM parser + bundle server
+treelsp watch          # watch mode — regenerate on changes
+```
+
+### Prerequisites
+
+- Node.js 18+
+- [tree-sitter CLI](https://github.com/tree-sitter/tree-sitter/blob/master/cli/README.md) for compiling grammars to WASM
+
+## The Four Layers
+
+### Grammar — what the syntax looks like
+
+Builder methods match Tree-sitter exactly (`seq`, `choice`, `repeat`, `field`, `prec.left`, etc.). Forward references use `r.rule('name')` — type-safe, no Proxy magic.
+
+```typescript
+grammar: {
+  binary_expr: r => r.prec.left(3, r.seq(
+    r.field('left', r.rule('expression')),
+    '+',
+    r.field('right', r.rule('expression')),
+  )),
+}
+```
+
+### Semantic — what names mean
+
+Three concepts: **declarations** (introduce names), **references** (use names), **scopes** (boundaries). This drives go-to-definition, find references, rename, and completion automatically.
+
+```typescript
+semantic: {
+  program:       { scope: 'global' },
+  function_decl: { scope: 'lexical', declares: { field: 'name', scope: 'enclosing' } },
+  variable_decl: { declares: { field: 'name', scope: 'enclosing' } },
+  identifier:    { references: { field: 'name', to: ['variable_decl', 'function_decl'], onUnresolved: 'error' } },
+}
+```
+
+### Validation — custom error checking
+
+Validators are plain functions. Run after parsing and scope resolution.
+
+```typescript
+validation: {
+  variable_decl(node, ctx) {
+    if (!node.field('type') && !node.field('value')) {
+      ctx.error(node, 'Variable must have a type or an initializer');
+    }
+  },
+}
+```
+
+### LSP — editor presentation
+
+Hover, completion detail, document symbols. Everything else is automatic.
+
+```typescript
+lsp: {
+  variable_decl: {
+    completionKind: 'Variable',
+    symbol: { kind: 'Variable', label: n => n.field('name').text },
+    hover(node) {
+      return `**let** \`${node.field('name').text}\``;
     },
-    identifier: {
-      references: { field: 'name', to: 'variable_decl', onUnresolved: 'error' },
+  },
+}
+```
+
+## Defaults System
+
+Three levels of engagement for every feature:
+
+1. **Zero config** — works automatically from grammar + semantic
+2. **Configure** — tweak with simple options
+3. **Override** — replace with your own function, optionally calling defaults
+
+```typescript
+import { defineLanguage, defaults } from 'treelsp';
+
+export default defineLanguage({
+  lsp: {
+    variable_decl: {
+      hover(node, ctx) {
+        const base = defaults.lsp.hover(node, ctx);
+        return `${base}\n\n${lookupDocs(node.field('name').text)}`;
+      },
     },
   },
 });
 ```
 
-Out of the box this gives you: parse errors, unresolved reference diagnostics, go-to-definition, find references, rename, scope-based completion, keyword completion, generic hover, and document symbols.
-
 ## Repository Structure
 
-This is a pnpm monorepo with 4 packages:
+pnpm monorepo with 4 packages:
 
-- **treelsp** — core authoring API + codegen + runtime
-- **@treelsp/cli** — CLI tool for code generation
-- **@treelsp/vscode** — VS Code extension
-- **examples** — example languages (mini-lang)
+| Package | Description |
+|---------|-------------|
+| [`treelsp`](./packages/treelsp) | Core — authoring API, codegen, runtime |
+| [`@treelsp/cli`](./packages/cli) | CLI tool — `init`, `generate`, `build`, `watch` |
+| [`@treelsp/vscode`](./packages/vscode) | VS Code extension — discovers and launches language servers |
+| [`examples`](./packages/examples) | Example languages — [mini-lang](./packages/examples/mini-lang), [schema-lang](./packages/examples/schema-lang) |
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- pnpm 9+
-- Tree-sitter CLI (for compiling grammars to WASM)
-
-### Installation
+## Development
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Run in watch mode
-pnpm dev
+pnpm install          # install dependencies
+pnpm build            # build all packages
+pnpm test             # run all tests
+pnpm lint             # lint all packages
+pnpm -r dev           # watch mode
 ```
-
-### Project Commands
-
-```bash
-pnpm build       # Build all packages
-pnpm test        # Run all tests
-pnpm lint        # Lint all packages
-pnpm dev         # Watch mode for all packages
-pnpm clean       # Clean all build artifacts
-```
-
-### CLI Commands
-
-```bash
-treelsp init      # Scaffold a new language project
-treelsp generate  # Generate grammar.js, AST types, server
-treelsp build     # Compile grammar to WASM
-treelsp watch     # Watch mode - re-run generate + build
-```
-
-## Documentation
-
-- [DESIGN.md](./DESIGN.md) — Complete design document (source of truth)
-- [CLAUDE.md](./CLAUDE.md) — Project instructions and conventions
-- [examples/mini-lang](./packages/examples/mini-lang) — Minimal working example
 
 ## Tech Stack
 
 | Concern | Tool |
-|---|---|
-| Language | TypeScript 5.4+ |
+|---------|------|
+| Language | TypeScript (strict mode) |
 | Package manager | pnpm |
 | Build | tsdown |
 | Testing | Vitest |
 | Linting | ESLint 9 |
-| Parser | Tree-sitter |
-| LSP server | vscode-languageserver |
+| Parser | Tree-sitter (web-tree-sitter) |
+| LSP | vscode-languageserver |
 | Target | Node.js + Browser (WASM) |
 
-## Implementation Status
+## Documentation
 
-All 8 core steps complete (see DESIGN.md § Implementation Order):
+- [DESIGN.md](./DESIGN.md) — full design document (source of truth for all decisions)
+- [@treelsp/cli README](./packages/cli/README.md) — CLI usage and configuration
 
-1. ✅ Project setup and monorepo structure
-2. ✅ Definition layer types (grammar, semantic, validation, lsp)
-3. ✅ Grammar codegen (emit grammar.js)
-4. ✅ CLI tooling (init, generate, build, watch)
-5. ✅ Runtime parser (Tree-sitter WASM loading, ASTNode wrapper)
-6. ✅ Scope resolution (scope chain, resolver, workspace index)
-7. ✅ LSP handlers + server codegen
-8. ✅ End-to-end validation (mini-lang example)
-9. ✅ VS Code extension (manifest discovery, LanguageClient launch)
+## Related Projects
 
-### Next Steps
-
-These are the remaining tasks to go from "core complete" to "usable end-to-end":
-
-- [x] **Compile grammar.wasm** — Wire tree-sitter CLI in `treelsp build` to compile `grammar.js → grammar.wasm`
-- [x] **Live integration test** — Run the actual LSP server against `test.mini` with a real WASM parser to verify parsing, diagnostics, hover, go-to-definition all work
-- [x] **Dynamic language discovery** — VS Code extension uses pattern-based document selectors to activate for any treelsp language without hardcoding or window reloads
-- [x] **Syntax highlighting** — Generate `highlights.scm` and `locals.scm` queries from grammar + LSP semantic tokens
-- [ ] **Publish pipeline** — VS Code Marketplace packaging for `@treelsp/vscode`, npm publishing for `treelsp` and `@treelsp/cli`
-- [ ] **Error recovery UX** — Surface meaningful errors when grammar.wasm is missing, server fails to start, etc.
-- [ ] **Second example language** — Validate the framework generalizes beyond mini-lang
-
-## Key Design Decisions
-
-- **Grammar builder**: `r => r.seq(...)` function style (type-safe, ergonomic)
-- **Method names**: Match Tree-sitter exactly (familiar for Tree-sitter users)
-- **Forward references**: `r.rule('name')` instead of `$.name` (type-safe)
-- **No custom DSL**: TypeScript is the grammar format
-- **Strict TypeScript**: `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess`
-- **Build tool**: tsdown (not tsup - unmaintained)
+- [Tree-sitter](https://tree-sitter.github.io) — the parsing engine
+- [web-tree-sitter](https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_web) — WASM bindings
 
 ## License
 
 MIT
-
-## Related Projects
-
-- [Tree-sitter](https://tree-sitter.github.io) — The parsing engine
-- [Langium](https://langium.org) — Prior art for grammar-first LSP generation
-- [web-tree-sitter](https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_web) — WASM bindings

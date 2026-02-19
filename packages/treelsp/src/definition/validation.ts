@@ -10,7 +10,7 @@ export interface DiagnosticOptions {
   /** Report on specific child node */
   at?: any;
 
-  /** Langium-style: highlight named field */
+  /** Highlight named field */
   property?: string;
 
   /** If property is array, which element */

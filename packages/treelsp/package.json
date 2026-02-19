@@ -1,7 +1,7 @@
 {
   "name": "treelsp",
   "version": "0.0.1",
-  "description": "A Langium-style LSP generator using Tree-sitter as the parsing backend",
+  "description": "A grammar-first LSP generator using Tree-sitter as the parsing backend",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

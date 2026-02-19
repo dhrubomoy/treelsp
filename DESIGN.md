@@ -6,11 +6,11 @@
 
 ## What Is treelsp?
 
-treelsp is a Langium-style LSP generator that uses Tree-sitter as its parsing backend. You define a grammar in TypeScript → treelsp generates a full Language Server.
+treelsp is a grammar-first LSP generator that uses Tree-sitter as its parsing backend. You define a grammar in TypeScript → treelsp generates a full Language Server.
 
 **Core value proposition:**
 - Tree-sitter's parsing (fast, error-tolerant, incremental, battle-tested)
-- Langium's developer experience (grammar-first, generates a full LSP)
+- Grammar-first developer experience (define grammar + semantics, get a full LSP)
 - TypeScript throughout — no new DSLs to learn
 
 **Incremental parsing**
@@ -460,7 +460,7 @@ semantic: {
 
 ## Validation Layer
 
-Validators run after parsing and scope resolution. Inspired by Langium but simpler — no registry, no DI, just functions.
+Validators run after parsing and scope resolution. No registry, no DI, just functions.
 
 ### Shape
 
@@ -520,7 +520,7 @@ interface ValidationContext {
 ```typescript
 interface DiagnosticOptions {
   at?: ASTNode;             // report on specific child node
-  property?: string;        // Langium-style: highlight named field (e.g. 'params')
+  property?: string;        // highlight named field (e.g. 'params')
   index?: number;           // if property is array, which element
   fix?: {
     label: string;
@@ -840,7 +840,6 @@ Built in this order — each step was testable before the next:
 - web-tree-sitter: https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_web
 - vscode-languageserver: https://github.com/microsoft/vscode-languageserver-node
 - LSP specification: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
-- Langium (prior art): https://langium.org
 
 
 ## Decisions & Open Questions
@@ -887,7 +886,7 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Each rule accepts a single function or an array of functions
 - `mergeValidation(...maps)` merges validator maps from multiple files
 - `$document` and `$workspace` special keys for document/workspace-level validators
-- Langium-style `property` + `index` targeting on diagnostics
+- `property` + `index` targeting on diagnostics
 - Execution order: parse → scope resolution → built-in checks → node validators → $document → $workspace
 
 **LSP layer**
@@ -913,7 +912,7 @@ This section tells Claude Code what is settled and what still needs discussion.
 - `treelsp` and `@treelsp/cli` linked versioning (bump together)
 - GitHub Actions: CI on push/PR (lint, build, test), release via changesets/action
 - npm publish for `treelsp` and `@treelsp/cli`, VS Code Marketplace for `@treelsp/vscode`
-- Secrets required: `NPM_TOKEN`, `VSCE_PAT`
+- Secrets required: `NPM_TOKEN`
 
 ---
 

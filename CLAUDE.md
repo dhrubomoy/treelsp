@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## What This Project Is
-treelsp — a Langium-style LSP generator using Tree-sitter as the parsing backend.
+treelsp — a grammar-first LSP generator using Tree-sitter as the parsing backend.
 Read DESIGN.md for the full design. It is the source of truth for all decisions.
 
 ## How To Work On This Project
