@@ -631,6 +631,28 @@ lsp: {
     },
   },
 
+  // Semantic token customization
+  variable_decl: {
+    completionKind: 'Variable',
+    semanticToken: 'variable',       // simple: override token type
+  },
+
+  const_decl: {
+    completionKind: 'Constant',
+    semanticToken: {                  // detailed: token type + modifiers
+      type: 'variable',
+      modifiers: ['readonly'],
+    },
+  },
+
+  async_function_decl: {
+    completionKind: 'Function',
+    semanticToken: {
+      type: 'function',
+      modifiers: ['async'],
+    },
+  },
+
 },
 ```
 
@@ -662,6 +684,113 @@ These LSP features work with zero configuration once the semantic layer is defin
 | Syntax highlighting | Automatic — keywords, operators, declarations, literals classified from grammar + semantic |
 | Semantic tokens | Automatic — LSP `textDocument/semanticTokens/full` from grammar + semantic + `completionKind` |
 | Document sync + incremental reparse | Automatic via Tree-sitter |
+
+### Semantic Token Customization
+
+By default, semantic tokens are classified automatically:
+- Declarations and references get token types from `completionKind` (Variable→`variable`, Function→`function`, Class→`class`, etc.)
+- Anonymous alphabetic nodes → `keyword`
+- Anonymous symbolic nodes → `operator` (brackets/delimiters skipped)
+- Named leaf token rules → classified by name heuristic (`string_literal`→`string`, `number`→`number`, `comment`→`comment`)
+
+The `semanticToken` property on `LspRule` lets language authors override or extend this classification. It controls the token type and modifiers emitted for declarations (and their references) of that rule.
+
+#### Shape
+
+```typescript
+// String shorthand — sets token type, no modifiers
+semanticToken?: SemanticTokenType;
+
+// Object form — sets token type and/or modifiers
+semanticToken?: {
+  type?: SemanticTokenType;
+  modifiers?: SemanticTokenModifier[];
+};
+```
+
+#### SemanticTokenType
+
+Standard LSP semantic token types (index in array = value in encoded data):
+
+```
+'namespace' | 'type' | 'class' | 'enum' | 'interface' | 'struct' |
+'typeParameter' | 'parameter' | 'variable' | 'property' | 'enumMember' |
+'event' | 'function' | 'method' | 'macro' | 'keyword' | 'modifier' |
+'comment' | 'string' | 'number' | 'regexp' | 'operator' | 'decorator'
+```
+
+#### SemanticTokenModifier
+
+Standard LSP semantic token modifiers (encoded as bit flags):
+
+```
+'declaration' | 'definition' | 'readonly' | 'static' | 'deprecated' |
+'abstract' | 'async' | 'modification' | 'documentation' | 'defaultLibrary'
+```
+
+Note: the `declaration` modifier is always set automatically on declaration nodes — you don't need to include it.
+
+#### Interaction with `completionKind`
+
+`semanticToken` takes precedence over `completionKind` for token classification:
+- If `semanticToken` is set, it controls the token type and modifiers
+- If only `completionKind` is set, the automatic mapping applies (same as today)
+- Both can coexist — `completionKind` still drives completion item icons, `semanticToken` drives highlighting
+
+#### Examples
+
+```typescript
+lsp: {
+  // Simple override — just change the token type
+  variable_decl: {
+    completionKind: 'Variable',
+    semanticToken: 'variable',
+  },
+
+  // Constant with readonly modifier — VS Code will use a distinct color
+  const_decl: {
+    completionKind: 'Constant',
+    semanticToken: {
+      type: 'variable',
+      modifiers: ['readonly'],
+    },
+  },
+
+  // Async functions get the async modifier
+  async_function_decl: {
+    completionKind: 'Function',
+    semanticToken: {
+      type: 'function',
+      modifiers: ['async'],
+    },
+  },
+
+  // Parameters — customize type without affecting completionKind
+  parameter: {
+    completionKind: 'Variable',
+    semanticToken: 'parameter',
+  },
+
+  // Deprecated items — modifier only, token type from completionKind
+  deprecated_decl: {
+    completionKind: 'Function',
+    semanticToken: {
+      modifiers: ['deprecated'],
+    },
+  },
+},
+```
+
+#### Implementation
+
+In `provideSemanticTokensFull()`, when building the `declNodeTokenType` and `refNodeTokenType` maps:
+
+1. Check if the `LspRule` has a `semanticToken` property
+2. If it's a string, use it as the token type with no extra modifiers
+3. If it's an object, use `type` for token type (fall back to `completionKind` mapping if omitted) and `modifiers` for modifier bits
+4. If absent, fall back to current `completionKind` mapping
+
+The modifier bitmask is stored alongside the token type. Declaration nodes still get the `declaration` modifier bit OR'd in automatically.
 
 ---
 
@@ -831,6 +960,7 @@ Built in this order — each step was testable before the next:
 11. ✅ `src/runtime/lsp/semantic-tokens.ts` — LSP semantic tokens for VS Code highlighting
 12. ✅ `extras` declaration — whitespace and comments in grammar definition
 13. ✅ Publish pipeline — changesets, GitHub Actions CI/CD, npm + VS Code Marketplace
+14. [ ] `semanticToken` property on `LspRule` — user-configurable token types and modifiers for declarations/references
 
 ---
 
@@ -898,6 +1028,7 @@ This section tells Claude Code what is settled and what still needs discussion.
 - `signature` on a declaration node — triggering logic is automatic if `call` is annotated in semantic
 - Go-to-definition, find references, rename are fully automatic from semantic layer
 - `$unresolved` special key for customising unresolved reference hover message
+- `semanticToken` on `LspRule` — string shorthand for token type or `{ type, modifiers }` object; takes precedence over `completionKind` for highlighting but both can coexist
 
 **Defaults system**
 - Three levels: zero config → configure → override
@@ -963,6 +1094,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
 - [ ] **No completion trigger characters** — completions don't auto-trigger on `.` or `(`; must be language-defined
 - [x] **No signature help handler** — fixed: handler + trigger characters from lsp config
+- [ ] **No `semanticToken` customization** — token types and modifiers are fully automatic with no override; blocks languages that need `readonly`, `async`, `deprecated` modifiers or `parameter` vs `variable` distinction
 
 ### DX & Robustness
 
