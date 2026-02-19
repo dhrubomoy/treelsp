@@ -29,6 +29,14 @@
     "./backend/tree-sitter": {
       "types": "./dist/backend/tree-sitter/index.d.ts",
       "import": "./dist/backend/tree-sitter/index.js"
+    },
+    "./codegen/lezer": {
+      "types": "./dist/codegen/lezer/index.d.ts",
+      "import": "./dist/codegen/lezer/index.js"
+    },
+    "./backend/lezer": {
+      "types": "./dist/backend/lezer/index.d.ts",
+      "import": "./dist/backend/lezer/index.js"
     }
   },
   "files": [
@@ -60,6 +68,10 @@
   "homepage": "https://github.com/dhrubomoy/treelsp#readme",
   "bugs": "https://github.com/dhrubomoy/treelsp/issues",
   "dependencies": {
+    "@lezer/common": "^1.5.1",
+    "@lezer/generator": "^1.8.0",
+    "@lezer/lr": "^1.4.8",
+    "esbuild": "^0.27.3",
     "vscode-languageserver": "^9.0.1",
     "web-tree-sitter": "^0.24.4"
   },

@@ -15,6 +15,7 @@ import { getCodegenBackend } from '../backends.js';
  */
 const BACKEND_RUNTIME_IMPORT: Record<string, { specifier: string; className: string }> = {
   'tree-sitter': { specifier: 'treelsp/backend/tree-sitter', className: 'TreeSitterRuntime' },
+  'lezer': { specifier: 'treelsp/backend/lezer', className: 'LezerRuntime' },
 };
 
 /**
@@ -77,18 +78,35 @@ export async function buildProject(project: ResolvedLanguageProject) {
       throw new Error(`No runtime import configured for backend "${project.backend}"`);
     }
 
-    const serverEntry = [
-      `import { startStdioServer } from 'treelsp/server';`,
-      `import { ${runtimeImport.className} } from '${runtimeImport.specifier}';`,
-      `import { resolve, dirname } from 'node:path';`,
-      `import { fileURLToPath } from 'node:url';`,
-      `import definition from './grammar.ts';`,
-      ``,
-      `const __dirname = dirname(fileURLToPath(import.meta.url));`,
-      `const parserPath = resolve(__dirname, 'grammar.wasm');`,
-      ``,
-      `startStdioServer({ definition, parserPath, backend: new ${runtimeImport.className}() });`,
-    ].join('\n');
+    let serverEntry: string;
+
+    if (project.backend === 'lezer') {
+      // Lezer: statically import the parser bundle (esbuild inlines it)
+      serverEntry = [
+        `import { startStdioServer } from 'treelsp/server';`,
+        `import { ${runtimeImport.className} } from '${runtimeImport.specifier}';`,
+        `import definition from './grammar.ts';`,
+        `import { parser } from './generated/parser.bundle.js';`,
+        `import parserMeta from './generated/parser-meta.json';`,
+        ``,
+        `const backend = new ${runtimeImport.className}(parser, parserMeta);`,
+        `startStdioServer({ definition, parserPath: '', backend });`,
+      ].join('\n');
+    } else {
+      // Tree-sitter: load grammar.wasm at runtime
+      serverEntry = [
+        `import { startStdioServer } from 'treelsp/server';`,
+        `import { ${runtimeImport.className} } from '${runtimeImport.specifier}';`,
+        `import { resolve, dirname } from 'node:path';`,
+        `import { fileURLToPath } from 'node:url';`,
+        `import definition from './grammar.ts';`,
+        ``,
+        `const __dirname = dirname(fileURLToPath(import.meta.url));`,
+        `const parserPath = resolve(__dirname, 'grammar.wasm');`,
+        ``,
+        `startStdioServer({ definition, parserPath, backend: new ${runtimeImport.className}() });`,
+      ].join('\n');
+    }
 
     // Locate treelsp's node_modules so esbuild can resolve vscode-languageserver.
     const treelspServer = import.meta.resolve('treelsp/server');

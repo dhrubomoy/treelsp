@@ -21,6 +21,10 @@ const BACKENDS: Record<string, () => Promise<ParserBackendCodegen>> = {
     const { TreeSitterCodegen } = await import('treelsp/codegen/tree-sitter') as { TreeSitterCodegen: new (options?: { treeSitterBin?: string }) => ParserBackendCodegen };
     return new TreeSitterCodegen({ treeSitterBin });
   },
+  'lezer': async () => {
+    const { LezerCodegen } = await import('treelsp/codegen/lezer') as { LezerCodegen: new () => ParserBackendCodegen };
+    return new LezerCodegen();
+  },
 };
 
 /**
