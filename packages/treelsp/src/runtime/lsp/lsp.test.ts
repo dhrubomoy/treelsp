@@ -4,10 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import type { ASTNode } from '../parser/ast-node.js';
 import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 import { Scope, type Declaration, type Reference } from '../scope/scope.js';
 import type { DocumentScope } from '../scope/resolver.js';
-import type { DocumentState } from '../parser/tree-sitter/tree.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition } from '../../definition/lsp.js';
 import type { Workspace } from '../scope/workspace.js';

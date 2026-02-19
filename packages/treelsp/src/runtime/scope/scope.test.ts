@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { Scope } from './scope.js';
+import type { ASTNode } from '../parser/ast-node.js';
 import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 
 // Mock ASTNode for testing

@@ -4,10 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import type { ASTNode } from '../parser/ast-node.js';
 import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 import { Scope, type Declaration, type Reference } from '../scope/scope.js';
 import type { DocumentScope } from '../scope/resolver.js';
-import type { DocumentState } from '../parser/tree-sitter/tree.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition } from '../../definition/lsp.js';
 import { provideSemanticTokensFull, SEMANTIC_TOKEN_TYPES } from './semantic-tokens.js';
@@ -30,7 +31,7 @@ function createMockNode(
     isNamed?: boolean;
     fields?: Record<string, any>;
   }
-): ASTNode {
+): TreeSitterASTNode {
   const startLine = options?.startLine ?? 0;
   const startChar = options?.startChar ?? 0;
   const endLine = options?.endLine ?? startLine;
