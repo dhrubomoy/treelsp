@@ -155,6 +155,7 @@ export default defineLanguage({
       declares: {
         field: 'name',
         scope: 'enclosing',
+        strategy: 'always',
       },
     },
 
@@ -203,6 +204,28 @@ export default defineLanguage({
       if (!node.field('value')) {
         ctx.error(node, 'Variable must have an initializer', {
           property: 'value',
+        });
+      }
+
+      // Check for duplicate declarations
+      const nameNode = node.field('name');
+      if (!nameNode) return;
+      const name = nameNode.text;
+      const decls = ctx.declarationsOf(node).filter((d: any) => d.name === name);
+      if (decls.length > 1 && decls[0].node.id !== nameNode.id) {
+        ctx.error(node, `Variable '${name}' is already declared`, {
+          code: 'duplicate-declaration',
+          at: nameNode,
+          fix: {
+            label: `Remove duplicate declaration of '${name}'`,
+            edits: [{
+              range: {
+                start: node.startPosition,
+                end: { line: node.endPosition.line + 1, character: 0 },
+              },
+              newText: '',
+            }],
+          },
         });
       }
     },

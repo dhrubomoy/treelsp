@@ -619,4 +619,65 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       }
     });
   });
+
+  // ========== Code Actions Tests ==========
+
+  describe('code actions', () => {
+    it('reports duplicate variable and offers fix to remove it', async () => {
+      const source = 'let x = 1;\nlet x = 2;\n';
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///dup.mini', version: 1, languageId: 'minilang' },
+        source,
+      );
+      try {
+        const service = createServer(definition);
+        service.documents.open(doc);
+
+        // Should have a duplicate-declaration error
+        const diags = service.computeDiagnostics(doc);
+        const dupDiag = diags.find(d => d.code === 'duplicate-declaration');
+        expect(dupDiag).toBeDefined();
+        expect(dupDiag!.message).toContain("'x'");
+        expect(dupDiag!.fix).toBeDefined();
+        expect(dupDiag!.fix!.label).toContain('x');
+
+        // Code action should be returned for the range of the second decl
+        const actions = service.provideCodeActions(doc, {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 10 },
+        });
+        expect(actions).toHaveLength(1);
+        expect(actions[0]!.kind).toBe('quickfix');
+        expect(actions[0]!.edit.changes['file:///dup.mini']).toHaveLength(1);
+
+        // Fix should remove the entire second line
+        const edit = actions[0]!.edit.changes['file:///dup.mini']![0]!;
+        expect(edit.newText).toBe('');
+        expect(edit.range.start.line).toBe(1);
+        expect(edit.range.end.line).toBe(2);
+      } finally {
+        doc.dispose();
+      }
+    });
+
+    it('does not report duplicate when variable is declared once', async () => {
+      const source = 'let x = 1;\nlet y = 2;\n';
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///nodup.mini', version: 1, languageId: 'minilang' },
+        source,
+      );
+      try {
+        const service = createServer(definition);
+        service.documents.open(doc);
+
+        const diags = service.computeDiagnostics(doc);
+        const dupDiag = diags.find(d => d.code === 'duplicate-declaration');
+        expect(dupDiag).toBeUndefined();
+      } finally {
+        doc.dispose();
+      }
+    });
+  });
 });
