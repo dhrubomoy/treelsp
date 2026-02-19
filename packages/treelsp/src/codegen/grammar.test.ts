@@ -292,6 +292,62 @@ describe('generateGrammar', () => {
     expect(result).not.toContain('extras');
   });
 
+  it('generates externals config with rule references', () => {
+    const definition: LanguageDefinition<'program' | 'identifier'> = {
+      name: 'ExternalsTest',
+      fileExtensions: ['.ext'],
+      entry: 'program',
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      externals: r => [r.rule('indent'), r.rule('dedent')],
+
+      grammar: {
+        program: r => r.repeat(r.rule('identifier')),
+        identifier: r => r.token(/[a-zA-Z]+/),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).toContain('externals: $ => [');
+    expect(result).toContain('$.indent');
+    expect(result).toContain('$.dedent');
+  });
+
+  it('generates externals config with single reference', () => {
+    const definition: LanguageDefinition<'program' | 'identifier'> = {
+      name: 'ExternalsSingleTest',
+      fileExtensions: ['.ext'],
+      entry: 'program',
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      externals: r => [r.rule('newline')],
+
+      grammar: {
+        program: r => r.repeat(r.rule('identifier')),
+        identifier: r => r.token(/[a-zA-Z]+/),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).toContain('externals: $ => [');
+    expect(result).toContain('$.newline');
+  });
+
+  it('does not emit externals when not specified', () => {
+    const definition: LanguageDefinition<'program'> = {
+      name: 'NoExternalsTest',
+      fileExtensions: ['.noext'],
+      entry: 'program',
+
+      grammar: {
+        program: r => r.token('x'),
+      },
+    };
+
+    const result = generateGrammar(definition);
+    expect(result).not.toContain('externals');
+  });
+
   it('handles optional, repeat, and repeat1', () => {
     const definition: LanguageDefinition<'program' | 'item'> = {
       name: 'RepeatTest',

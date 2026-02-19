@@ -994,8 +994,9 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Builder method names match Tree-sitter exactly: `seq`, `choice`, `optional`, `repeat`, `repeat1`, `field`, `prec`, `prec.left`, `prec.right`, `prec.dynamic`, `token`, `alias`
 - `r.rule('name')` instead of `$.name` — same concept, type-safe, no Proxy needed
 - No custom DSL — TypeScript is the grammar format
-- `word`, `conflicts`, and `extras` are top-level keys in `defineLanguage`, not inside `grammar`
+- `word`, `conflicts`, `extras`, and `externals` are top-level keys in `defineLanguage`, not inside `grammar`
 - `extras` follows the same builder function pattern as `conflicts`: `extras: r => [/\s+/, r.rule('comment')]`
+- `externals` follows the same pattern: `externals: r => [r.rule('indent'), r.rule('dedent')]` — declares tokens produced by external scanners
 - Left recursion is handled natively by Tree-sitter's GLR parser — no special abstraction needed
 - Tree-sitter's precedence model is exposed directly — no `r.binary()` helper abstraction
 
@@ -1081,7 +1082,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Missing Grammar Features — Blocks Real Languages
 
-- [ ] **No `externals` support** — hard blocker for external scanners (Python indent/dedent, heredocs, template literals)
+- [x] **No `externals` support** — fixed: `externals` top-level config option, same builder pattern as `extras`/`conflicts`
 - [ ] **No `supertypes` support** — affects Tree-sitter tooling integration
 - [ ] **No `inline` support** — needed for performance-sensitive grammars
 - [x] **No validation of `entry`/`word`** — fixed: `generateGrammar()` validates existence and that `word` is a token rule

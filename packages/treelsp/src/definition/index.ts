@@ -32,6 +32,9 @@ export interface LanguageDefinition<T extends string = string> {
   /** Extra tokens that can appear anywhere (e.g., whitespace, comments) */
   extras?: (r: any) => any[];
 
+  /** External scanner token names (e.g., indent/dedent for Python-style languages) */
+  externals?: (r: any) => any[];
+
   /** Grammar layer - rule definitions */
   grammar: GrammarDefinition<T>;
 

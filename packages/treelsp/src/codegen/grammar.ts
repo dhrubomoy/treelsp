@@ -292,6 +292,26 @@ export function generateGrammar<T extends string>(
     conflictsLine = `  conflicts: $ => [\n${conflictsSerialized}\n  ],\n\n`;
   }
 
+  // Generate externals config
+  let externalsLine = '';
+  if (definition.externals) {
+    const rawExternals = definition.externals(builder);
+    const externalsSerialized = rawExternals
+      .map((item: unknown) => {
+        let node: RuleNode;
+        if (typeof item === 'string') {
+          node = { type: 'string', value: item };
+        } else if (item instanceof RegExp) {
+          node = { type: 'regex', value: item };
+        } else {
+          node = item as RuleNode;
+        }
+        return `    ${serializeNode(node, 2)}`;
+      })
+      .join(',\n');
+    externalsLine = `  externals: $ => [\n${externalsSerialized}\n  ],\n\n`;
+  }
+
   // Generate extras config
   let extrasLine = '';
   if (definition.extras) {
@@ -322,7 +342,7 @@ export function generateGrammar<T extends string>(
 module.exports = grammar({
   name: ${JSON.stringify(definition.name)},
 
-${wordLine}${conflictsLine}${extrasLine}  rules: {
+${wordLine}${externalsLine}${conflictsLine}${extrasLine}  rules: {
 ${rulesCode}
   }
 });
