@@ -181,7 +181,12 @@ export function startStdioServer(options: StdioServerOptions): void {
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
-      completionProvider: { resolveProvider: false },
+      completionProvider: {
+        resolveProvider: false,
+        ...(service.completionTriggerCharacters.length > 0
+          ? { triggerCharacters: service.completionTriggerCharacters }
+          : {}),
+      },
       renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
       semanticTokensProvider: {

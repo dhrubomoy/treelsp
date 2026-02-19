@@ -139,6 +139,7 @@ export interface LspRule {
   symbol?: SymbolDescriptor;
   hover?: HoverHandler;
   complete?: CompletionHandler;
+  completionTrigger?: string[];
   signature?: SignatureDescriptor;
   semanticToken?: SemanticTokenType | SemanticTokenDescriptor;
 }

@@ -36,6 +36,24 @@ const COMPLETION_KIND_MAP: Record<CompletionKind, number> = {
 export { COMPLETION_KIND_MAP };
 
 /**
+ * Collect trigger characters from all rules with completionTrigger in the LSP config
+ */
+export function getCompletionTriggerCharacters(lsp?: LspDefinition): string[] {
+  if (!lsp) return [];
+  const triggers = new Set<string>();
+  const rules = lsp as Record<string, { completionTrigger?: string[] } | undefined>;
+  for (const [key, rule] of Object.entries(rules)) {
+    if (key.startsWith('$')) continue;
+    if (rule?.completionTrigger) {
+      for (const ch of rule.completionTrigger) {
+        triggers.add(ch);
+      }
+    }
+  }
+  return [...triggers];
+}
+
+/**
  * Provide completions at position
  *
  * Sources:

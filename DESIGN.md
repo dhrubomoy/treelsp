@@ -1092,7 +1092,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **No code actions** (`textDocument/codeAction`) — even though validation defines `fix`
 - [ ] **No folding ranges** (`textDocument/foldingRange`)
 - [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
-- [ ] **No completion trigger characters** — completions don't auto-trigger on `.` or `(`; must be language-defined
+- [x] **No completion trigger characters** — fixed: `completionTrigger` on `LspRule` collects per-rule triggers into `completionProvider.triggerCharacters`
 - [x] **No signature help handler** — fixed: handler + trigger characters from lsp config
 - [x] **No `semanticToken` customization** — fixed: `semanticToken` property on `LspRule` supports string shorthand or `{ type, modifiers }` object form
 

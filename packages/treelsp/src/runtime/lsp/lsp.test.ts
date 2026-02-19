@@ -23,7 +23,7 @@ import { computeDiagnostics } from './diagnostics.js';
 import { provideHover } from './hover.js';
 import { provideDefinition } from './definition.js';
 import { provideReferences } from './references.js';
-import { provideCompletion } from './completion.js';
+import { provideCompletion, getCompletionTriggerCharacters } from './completion.js';
 import { prepareRename, provideRename } from './rename.js';
 import { provideSymbols } from './symbols.js';
 import { provideSignatureHelp, getSignatureTriggerCharacters } from './signature-help.js';
@@ -2199,6 +2199,59 @@ describe('provideCompletion — custom handlers', () => {
     expect(fnItem?.detail).toBe('Declare function');
     expect(fnItem?.documentation).toBe('Defines a new function');
     expect(fnItem?.kind).toBe('Keyword');
+  });
+});
+
+// ========== Completion Trigger Character Tests ==========
+
+describe('getCompletionTriggerCharacters', () => {
+  it('should return empty array when no LSP config', () => {
+    expect(getCompletionTriggerCharacters(undefined)).toEqual([]);
+  });
+
+  it('should return empty array when no completionTrigger defined', () => {
+    const lsp: LspDefinition = {
+      variable_decl: { completionKind: 'Variable' },
+    };
+    expect(getCompletionTriggerCharacters(lsp)).toEqual([]);
+  });
+
+  it('should collect trigger characters from rules', () => {
+    const lsp: LspDefinition = {
+      member_expr: {
+        completionTrigger: ['.'],
+      },
+    };
+    const triggers = getCompletionTriggerCharacters(lsp);
+    expect(triggers).toContain('.');
+    expect(triggers).toHaveLength(1);
+  });
+
+  it('should deduplicate trigger characters across rules', () => {
+    const lsp: LspDefinition = {
+      member_expr: {
+        completionTrigger: ['.', '['],
+      },
+      import_path: {
+        completionTrigger: ['.', '/'],
+      },
+    };
+    const triggers = getCompletionTriggerCharacters(lsp);
+    expect(triggers).toHaveLength(3); // '.', '[', '/' — deduped
+    expect(triggers).toContain('.');
+    expect(triggers).toContain('[');
+    expect(triggers).toContain('/');
+  });
+
+  it('should skip $-prefixed keys', () => {
+    const lsp = {
+      $keywords: { let: { detail: 'Declare' } },
+      member_expr: {
+        completionTrigger: ['.'],
+      },
+    } as LspDefinition;
+    const triggers = getCompletionTriggerCharacters(lsp);
+    expect(triggers).toEqual(['.']);
   });
 });
 

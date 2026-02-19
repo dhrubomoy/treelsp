@@ -11,7 +11,7 @@ import { computeDiagnostics, type Diagnostic } from './diagnostics.js';
 import { provideHover, type HoverResult } from './hover.js';
 import { provideDefinition, type DefinitionResult } from './definition.js';
 import { provideReferences, type ReferenceLocation } from './references.js';
-import { provideCompletion } from './completion.js';
+import { provideCompletion, getCompletionTriggerCharacters } from './completion.js';
 import { prepareRename, provideRename, type PrepareRenameResult, type RenameResult } from './rename.js';
 import { provideSymbols, type DocumentSymbol } from './symbols.js';
 import { provideSemanticTokensFull, type SemanticTokensResult } from './semantic-tokens.js';
@@ -61,6 +61,9 @@ export interface LanguageService {
 
   /** Signature help trigger characters (from lsp config) */
   signatureTriggerCharacters: string[];
+
+  /** Completion trigger characters (from lsp config) */
+  completionTriggerCharacters: string[];
 }
 
 /**
@@ -76,6 +79,7 @@ export function createServer(definition: LanguageDefinition): LanguageService {
 
   const documents = new DocumentManager(semantic);
   const triggerChars = getSignatureTriggerCharacters(lsp);
+  const completionTriggers = getCompletionTriggerCharacters(lsp);
 
   function getDocScope(document: DocumentState) {
     const wsDoc = documents.get(document.uri);
@@ -155,5 +159,6 @@ export function createServer(definition: LanguageDefinition): LanguageService {
     },
 
     signatureTriggerCharacters: triggerChars,
+    completionTriggerCharacters: completionTriggers,
   };
 }
