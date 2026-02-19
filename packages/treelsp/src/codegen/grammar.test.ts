@@ -372,6 +372,7 @@ describe('generateGrammar', () => {
       fileExtensions: ['.test'],
       entry: 'nonexistent',
       grammar: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         program: (r: any) => r.token('x'),
       },
     } as LanguageDefinition;
@@ -387,7 +388,9 @@ describe('generateGrammar', () => {
       entry: 'program',
       word: 'identifieer',
       grammar: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         program: (r: any) => r.token('x'),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         identifier: (r: any) => r.token(/[a-z]+/),
       },
     } as LanguageDefinition;
@@ -403,9 +406,13 @@ describe('generateGrammar', () => {
       entry: 'program',
       word: 'expression',
       grammar: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         program: (r: any) => r.repeat(r.rule('expression')),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         expression: (r: any) => r.choice(r.rule('identifier'), r.rule('number')),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         identifier: (r: any) => r.token(/[a-z]+/),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         number: (r: any) => r.token(/[0-9]+/),
       },
     } as LanguageDefinition;
