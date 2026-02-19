@@ -931,3 +931,65 @@ This section tells Claude Code what is settled and what still needs discussion.
 **User projects**
 - Should `grammar.wasm` be committed to user repos?
   Leaning yes (it's a build artifact users need, like a lock file) — but not decided
+
+---
+
+## Production Readiness
+
+Audit of concrete issues that would block or frustrate a real user. Organized by priority.
+
+### Bugs — Fix Before Any User Touches This
+
+- [ ] **`ctx.declarationsOf()` ignores its argument** — `diagnostics.ts` `createValidationContext` closes over the wrong `node` variable; `ctx.declarationsOf(someOtherNode)` always returns declarations for the context node
+- [ ] **`treelsp init` generates broken `tsconfig.json`** — references `treelsp/tsconfig.base.json` which is not exported or in the `files` array
+- [ ] **`init` hardcodes `^0.0.1`** — scaffolded `package.json` pins to wrong version after any release; should derive from CLI's own version at runtime
+- [ ] **`defaults` export shape doesn't match README** — README shows `defaults.lsp.hover(node, ctx)` but `defaults/index.ts` has no `.lsp` sub-object; documented example throws at runtime
+- [ ] **Signature help defined but never wired** — `LspRule.signature` and `SignatureDescriptor` exist in types, but `connection.onSignatureHelp` is never registered in `server/index.ts`
+- [ ] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
+- [ ] **`vscode-languageserver-textdocument` is an unused dependency**
+
+### Missing Grammar Features — Blocks Real Languages
+
+- [ ] **No `externals` support** — hard blocker for external scanners (Python indent/dedent, heredocs, template literals)
+- [ ] **No `supertypes` support** — affects Tree-sitter tooling integration
+- [ ] **No `inline` support** — needed for performance-sensitive grammars
+- [ ] **No validation of `entry`/`word`** — typos produce cryptic tree-sitter CLI errors; should catch at codegen time
+
+### Missing LSP Features
+
+- [ ] **No formatting** (`textDocument/formatting`)
+- [ ] **No code actions** (`textDocument/codeAction`) — even though validation defines `fix`
+- [ ] **No folding ranges** (`textDocument/foldingRange`)
+- [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
+- [ ] **No completion trigger characters** — completions don't auto-trigger on `.` or `(`; must be language-defined
+- [ ] **No signature help handler** — types exist, server wiring doesn't
+
+### DX & Robustness
+
+- [ ] **Server spams debug logs** — `connection.console.log` on every open/change/definition with no way to disable
+- [ ] **`watch` drops changes** — saves during a build are silently lost; no debounce
+- [ ] **`watch` doesn't track grammar.ts imports** — editing helper files doesn't trigger rebuild
+- [ ] **`build` has a brittle `import_meta` regex patch** — no check that it matched; silent failure leads to server crash
+- [ ] **No `engines` field** — `import.meta.resolve` requires Node 20+; no guard for Node 18 users
+- [ ] **`updateIncremental` throws on disposed documents** — race condition if close event fires then a pending change arrives; server handler has no try/catch
+
+### Testing Gaps
+
+- [ ] **Zero CLI tests** — the user-facing entry point is untested
+- [ ] **Integration tests skip silently when WASM is absent** — CI may report all green while skipping the most important tests
+- [ ] **No codegen error-path tests** — empty grammar, missing entry, bad rule references
+- [ ] **No end-to-end pipeline test** — nothing tests `generate` → `build` → start server → send LSP requests
+
+### Package Hygiene
+
+- [ ] **`codegen` and `runtime` are publicly exported** — contradicts the design that only `definition/` and `defaults/` are public API
+- [ ] **`tsdown` uses `platform: 'neutral'` for the server entry** — server imports Node.js-only `vscode-languageserver/lib/node/main.js`; should use `platform: 'node'`
+- [ ] **Cross-document references match by name+declaredBy, not identity** — find-references returns false positives when two declaration kinds can declare the same name
+
+### Documentation
+
+- [ ] **No JSDoc on `defineLanguage`** — the primary entry point has zero inline docs
+- [ ] **No JSDoc on semantic types** — `DeclarationDescriptor`, `ReferenceDescriptor`, scope kinds/targets have no inline documentation
+- [ ] **No JSDoc on LSP types** — `completionKind`, `SymbolDescriptor`, `SignatureDescriptor` undocumented
+- [ ] **`ctx.typeOf()` silently returns null** — exported in `LspContext` and `ValidationContext` but always returns `null`; should be documented or removed from v1 types
+- [ ] **README omits `extras`, `conflicts`, `word`** — important top-level config options not explained
