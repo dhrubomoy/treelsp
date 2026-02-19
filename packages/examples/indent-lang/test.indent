@@ -1,0 +1,9 @@
+x = 42
+name = "world"
+
+def greet(who):
+    result = who
+    return 0
+
+if x:
+    greet(name)

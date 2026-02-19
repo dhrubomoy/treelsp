@@ -1,6 +1,7 @@
 {
   "languages": [
     { "grammar": "mini-lang/grammar.ts" },
-    { "grammar": "schema-lang/grammar.ts" }
+    { "grammar": "schema-lang/grammar.ts" },
+    { "grammar": "indent-lang/grammar.ts" }
   ]
 }

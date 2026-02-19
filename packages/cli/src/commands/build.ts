@@ -59,6 +59,17 @@ export async function buildProject(project: ResolvedLanguageProject) {
       }
     }
 
+    // 3b. Copy external scanner source if present (scanner.c or scanner.cc)
+    //     tree-sitter expects it in src/ alongside the generated parser.c.
+    //     The user keeps the scanner at the project root; cleanup removes src/.
+    for (const scannerFile of ['scanner.c', 'scanner.cc']) {
+      const scannerSrc = resolve(project.projectDir, scannerFile);
+      const scannerDest = resolve(project.projectDir, 'src', scannerFile);
+      if (existsSync(scannerSrc)) {
+        copyFileSync(scannerSrc, scannerDest);
+      }
+    }
+
     // 4. Run tree-sitter build --wasm (compiles to WebAssembly)
     spinner.text = `Compiling to WASM for ${label}...`;
     execSync(`${treeSitterBin} build --wasm`, {
