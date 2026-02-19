@@ -7,7 +7,7 @@ import type { ASTNode } from '../parser/node.js';
 import type { DocumentState } from '../parser/tree.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
-import type { LspDefinition, CompletionKind } from '../../definition/lsp.js';
+import type { LspDefinition, LspRule, CompletionKind } from '../../definition/lsp.js';
 
 /**
  * Standard LSP semantic token types
@@ -77,6 +77,51 @@ const COMPLETION_KIND_TO_TOKEN_TYPE: Partial<Record<CompletionKind, string>> = {
   Constructor: 'function',
 };
 
+/** Index lookup for modifier names → bit position */
+const MODIFIER_BIT: Record<string, number> = {};
+for (let i = 0; i < SEMANTIC_TOKEN_MODIFIERS.length; i++) {
+  MODIFIER_BIT[SEMANTIC_TOKEN_MODIFIERS[i]!] = i;
+}
+
+/**
+ * Resolve token type index and modifier bitmask from an LspRule.
+ * `semanticToken` takes precedence over `completionKind`.
+ */
+function resolveTokenInfo(lspRule: LspRule | undefined): { typeIndex: number; modifiers: number } {
+  const defaultTypeIndex = TOKEN_TYPE_INDEX['variable']!;
+  if (!lspRule) return { typeIndex: defaultTypeIndex, modifiers: 0 };
+
+  const st = lspRule.semanticToken;
+
+  let typeName: string | undefined;
+  let modifiers = 0;
+
+  if (typeof st === 'string') {
+    // String shorthand — token type only
+    typeName = st;
+  } else if (st !== undefined) {
+    // Object form — type and/or modifiers
+    typeName = st.type;
+    if (st.modifiers) {
+      for (const mod of st.modifiers) {
+        const bit = MODIFIER_BIT[mod];
+        if (bit !== undefined) {
+          modifiers |= 1 << bit;
+        }
+      }
+    }
+  }
+
+  // If semanticToken didn't set a type, fall back to completionKind mapping
+  if (!typeName) {
+    const kind = lspRule.completionKind;
+    typeName = kind ? (COMPLETION_KIND_TO_TOKEN_TYPE[kind] ?? 'variable') : 'variable';
+  }
+
+  const typeIndex = TOKEN_TYPE_INDEX[typeName] ?? defaultTypeIndex;
+  return { typeIndex, modifiers };
+}
+
 const BRACKETS = new Set(['(', ')', '{', '}', '[', ']']);
 const DELIMITERS = new Set([';', ',', '.', ':']);
 
@@ -125,31 +170,27 @@ export function provideSemanticTokensFull(
 ): SemanticTokensResult {
   const tokens: RawToken[] = [];
 
-  // Build maps for declaration and reference node IDs → token type
-  // Declaration nodes get the completionKind of their declaring rule
-  const declNodeTokenType = new Map<number, number>();
-  const refNodeTokenType = new Map<number, number>();
+  // Build maps for declaration and reference node IDs → token type + modifiers
+  // Declaration nodes get the completionKind/semanticToken of their declaring rule
+  const declNodeTokenInfo = new Map<number, { typeIndex: number; modifiers: number }>();
+  const refNodeTokenInfo = new Map<number, { typeIndex: number; modifiers: number }>();
 
   for (const decl of docScope.declarations) {
     const lspRule = lsp?.[decl.declaredBy];
-    const kind = lspRule?.completionKind;
-    const typeName = kind ? (COMPLETION_KIND_TO_TOKEN_TYPE[kind] ?? 'variable') : 'variable';
-    const typeIndex = TOKEN_TYPE_INDEX[typeName] ?? TOKEN_TYPE_INDEX['variable']!;
-    declNodeTokenType.set(decl.node.id, typeIndex);
+    const info = resolveTokenInfo(lspRule);
+    declNodeTokenInfo.set(decl.node.id, info);
   }
 
   for (const ref of docScope.references) {
     if (ref.resolved) {
       const lspRule = lsp?.[ref.resolved.declaredBy];
-      const kind = lspRule?.completionKind;
-      const typeName = kind ? (COMPLETION_KIND_TO_TOKEN_TYPE[kind] ?? 'variable') : 'variable';
-      const typeIndex = TOKEN_TYPE_INDEX[typeName] ?? TOKEN_TYPE_INDEX['variable']!;
-      refNodeTokenType.set(ref.node.id, typeIndex);
+      const info = resolveTokenInfo(lspRule);
+      refNodeTokenInfo.set(ref.node.id, info);
     }
   }
 
   // Walk the tree depth-first, visiting all children (including anonymous)
-  walkForTokens(document.root, tokens, declNodeTokenType, refNodeTokenType, semantic);
+  walkForTokens(document.root, tokens, declNodeTokenInfo, refNodeTokenInfo, semantic);
 
   // Sort by position (line, then character)
   tokens.sort((a, b) => a.line - b.line || a.character - b.character);
@@ -170,19 +211,25 @@ export function provideSemanticTokensFull(
   return { data };
 }
 
+/** Token info stored in node maps */
+interface TokenInfo {
+  typeIndex: number;
+  modifiers: number;
+}
+
 /**
  * Walk the AST to collect semantic tokens
  */
 function walkForTokens(
   node: ASTNode,
   tokens: RawToken[],
-  declNodeTokenType: Map<number, number>,
-  refNodeTokenType: Map<number, number>,
+  declNodeTokenInfo: Map<number, TokenInfo>,
+  refNodeTokenInfo: Map<number, TokenInfo>,
   semantic: SemanticDefinition,
 ): void {
   // Check if this is a leaf node (no children at all)
   if (node.childCount === 0) {
-    const token = classifyLeaf(node, declNodeTokenType, refNodeTokenType, semantic);
+    const token = classifyLeaf(node, declNodeTokenInfo, refNodeTokenInfo, semantic);
     if (token) {
       tokens.push(token);
     }
@@ -191,11 +238,11 @@ function walkForTokens(
 
   // For named nodes with semantic declares, check if the name field child
   // should be classified. The scope resolver already tracked these in declarations.
-  // We handle this via the declNodeTokenType map on leaf nodes.
+  // We handle this via the declNodeTokenInfo map on leaf nodes.
 
   // Recurse into all children (including anonymous)
   for (const child of node.children) {
-    walkForTokens(child, tokens, declNodeTokenType, refNodeTokenType, semantic);
+    walkForTokens(child, tokens, declNodeTokenInfo, refNodeTokenInfo, semantic);
   }
 }
 
@@ -204,8 +251,8 @@ function walkForTokens(
  */
 function classifyLeaf(
   node: ASTNode,
-  declNodeTokenType: Map<number, number>,
-  refNodeTokenType: Map<number, number>,
+  declNodeTokenInfo: Map<number, TokenInfo>,
+  refNodeTokenInfo: Map<number, TokenInfo>,
   semantic: SemanticDefinition,
 ): RawToken | null {
   const start = node.startPosition;
@@ -213,26 +260,26 @@ function classifyLeaf(
   if (length <= 0) return null;
 
   // 1. Check if it's a declaration name
-  const declType = declNodeTokenType.get(node.id);
-  if (declType !== undefined) {
+  const declInfo = declNodeTokenInfo.get(node.id);
+  if (declInfo !== undefined) {
     return {
       line: start.line,
       character: start.character,
       length,
-      tokenType: declType,
-      modifiers: 1, // bit 0 = 'declaration'
+      tokenType: declInfo.typeIndex,
+      modifiers: declInfo.modifiers | 1, // OR in bit 0 = 'declaration'
     };
   }
 
   // 2. Check if it's a reference
-  const refType = refNodeTokenType.get(node.id);
-  if (refType !== undefined) {
+  const refInfo = refNodeTokenInfo.get(node.id);
+  if (refInfo !== undefined) {
     return {
       line: start.line,
       character: start.character,
       length,
-      tokenType: refType,
-      modifiers: 0,
+      tokenType: refInfo.typeIndex,
+      modifiers: refInfo.modifiers,
     };
   }
 

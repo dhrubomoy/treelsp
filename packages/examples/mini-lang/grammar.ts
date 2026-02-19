@@ -278,9 +278,10 @@ export default defineLanguage({
       },
     },
 
-    // Hover for parameters
+    // Parameters — distinct from variables in highlighting
     parameter: {
       completionKind: 'Variable',
+      semanticToken: 'parameter',
     },
   },
 });

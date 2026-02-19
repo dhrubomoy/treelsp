@@ -108,6 +108,30 @@ export interface SignatureDescriptor {
 }
 
 /**
+ * Standard LSP semantic token types
+ */
+export type SemanticTokenType =
+  | 'namespace' | 'type' | 'class' | 'enum' | 'interface' | 'struct'
+  | 'typeParameter' | 'parameter' | 'variable' | 'property' | 'enumMember'
+  | 'event' | 'function' | 'method' | 'macro' | 'keyword' | 'modifier'
+  | 'comment' | 'string' | 'number' | 'regexp' | 'operator' | 'decorator';
+
+/**
+ * Standard LSP semantic token modifiers
+ */
+export type SemanticTokenModifier =
+  | 'declaration' | 'definition' | 'readonly' | 'static' | 'deprecated'
+  | 'abstract' | 'async' | 'modification' | 'documentation' | 'defaultLibrary';
+
+/**
+ * Detailed semantic token descriptor with type and modifiers
+ */
+export interface SemanticTokenDescriptor {
+  type?: SemanticTokenType;
+  modifiers?: SemanticTokenModifier[];
+}
+
+/**
  * LSP rule definition
  */
 export interface LspRule {
@@ -116,6 +140,7 @@ export interface LspRule {
   hover?: HoverHandler;
   complete?: CompletionHandler;
   signature?: SignatureDescriptor;
+  semanticToken?: SemanticTokenType | SemanticTokenDescriptor;
 }
 
 /**

@@ -319,4 +319,206 @@ describe('provideSemanticTokensFull', () => {
     expect(result.data.length).toBeGreaterThanOrEqual(5);
     expect(result.data[3]).toBe(tokenTypeIndex('variable'));
   });
+
+  it('uses semanticToken string shorthand to override token type', () => {
+    const nameNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 4, endChar: 5,
+    });
+    const root = createMockNode('program', 'fn x()', {
+      children: [nameNode._syntaxNode],
+      namedChildren: [nameNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const decl: Declaration = {
+      name: 'x',
+      node: nameNode,
+      declaredBy: 'parameter',
+      visibility: 'private',
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [decl],
+    };
+
+    const lsp: LspDefinition = {
+      parameter: {
+        completionKind: 'Variable',
+        semanticToken: 'parameter',
+      },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('parameter'));
+    expect(result.data[4]).toBe(1); // declaration modifier still set
+  });
+
+  it('uses semanticToken object form with type and modifiers on declarations', () => {
+    const nameNode = createMockNode('identifier', 'MAX', {
+      startLine: 0, startChar: 6, endChar: 9,
+    });
+    const root = createMockNode('program', 'const MAX = 1', {
+      children: [nameNode._syntaxNode],
+      namedChildren: [nameNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const decl: Declaration = {
+      name: 'MAX',
+      node: nameNode,
+      declaredBy: 'const_decl',
+      visibility: 'private',
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [decl],
+    };
+
+    const lsp: LspDefinition = {
+      const_decl: {
+        completionKind: 'Constant',
+        semanticToken: {
+          type: 'variable',
+          modifiers: ['readonly'],
+        },
+      },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('variable'));
+    // readonly = bit 2 (1 << 2 = 4), declaration = bit 0 (1) → 5
+    expect(result.data[4]).toBe(5);
+  });
+
+  it('uses semanticToken modifiers-only form (type from completionKind)', () => {
+    const nameNode = createMockNode('identifier', 'old', {
+      startLine: 0, startChar: 0, endChar: 3,
+    });
+    const root = createMockNode('program', 'old', {
+      children: [nameNode._syntaxNode],
+      namedChildren: [nameNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const decl: Declaration = {
+      name: 'old',
+      node: nameNode,
+      declaredBy: 'deprecated_func',
+      visibility: 'private',
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [decl],
+    };
+
+    const lsp: LspDefinition = {
+      deprecated_func: {
+        completionKind: 'Function',
+        semanticToken: {
+          modifiers: ['deprecated'],
+        },
+      },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    // Token type from completionKind (Function → function)
+    expect(result.data[3]).toBe(tokenTypeIndex('function'));
+    // deprecated = bit 4 (1 << 4 = 16), declaration = bit 0 (1) → 17
+    expect(result.data[4]).toBe(17);
+  });
+
+  it('propagates semanticToken modifiers to references', () => {
+    const refNode = createMockNode('identifier', 'MAX', {
+      startLine: 1, startChar: 0, endChar: 3,
+    });
+    const root = createMockNode('program', 'MAX', {
+      children: [refNode._syntaxNode],
+      namedChildren: [refNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const declNode = createMockNode('identifier', 'MAX', {
+      startLine: 0, startChar: 6, endChar: 9,
+    });
+    const decl: Declaration = {
+      name: 'MAX',
+      node: declNode,
+      declaredBy: 'const_decl',
+      visibility: 'private',
+    };
+    const ref: Reference = {
+      node: refNode,
+      name: 'MAX',
+      to: ['const_decl'],
+      resolved: decl,
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [ref],
+      declarations: [],
+    };
+
+    const lsp: LspDefinition = {
+      const_decl: {
+        completionKind: 'Constant',
+        semanticToken: {
+          type: 'variable',
+          modifiers: ['readonly'],
+        },
+      },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    expect(result.data.length).toBeGreaterThanOrEqual(5);
+    expect(result.data[3]).toBe(tokenTypeIndex('variable'));
+    // References get modifiers from semanticToken but NOT the declaration bit
+    // readonly = bit 2 (1 << 2 = 4)
+    expect(result.data[4]).toBe(4);
+  });
+
+  it('semanticToken takes precedence over completionKind for token type', () => {
+    const nameNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endChar: 1,
+    });
+    const root = createMockNode('program', 'x', {
+      children: [nameNode._syntaxNode],
+      namedChildren: [nameNode._syntaxNode],
+    });
+    const doc = createMockDocument(root);
+
+    const decl: Declaration = {
+      name: 'x',
+      node: nameNode,
+      declaredBy: 'param',
+      visibility: 'private',
+    };
+    const scope: DocumentScope = {
+      root: new Scope('global', root, null),
+      nodeScopes: new Map(),
+      references: [],
+      declarations: [decl],
+    };
+
+    // completionKind says Variable (→ 'variable'), semanticToken says 'parameter'
+    const lsp: LspDefinition = {
+      param: {
+        completionKind: 'Variable',
+        semanticToken: 'parameter',
+      },
+    };
+
+    const result = provideSemanticTokensFull(doc, scope, {}, lsp);
+    // semanticToken wins
+    expect(result.data[3]).toBe(tokenTypeIndex('parameter'));
+  });
 });

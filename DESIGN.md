@@ -960,7 +960,7 @@ Built in this order — each step was testable before the next:
 11. ✅ `src/runtime/lsp/semantic-tokens.ts` — LSP semantic tokens for VS Code highlighting
 12. ✅ `extras` declaration — whitespace and comments in grammar definition
 13. ✅ Publish pipeline — changesets, GitHub Actions CI/CD, npm + VS Code Marketplace
-14. [ ] `semanticToken` property on `LspRule` — user-configurable token types and modifiers for declarations/references
+14. ✅ `semanticToken` property on `LspRule` — user-configurable token types and modifiers for declarations/references
 
 ---
 
@@ -1094,7 +1094,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
 - [ ] **No completion trigger characters** — completions don't auto-trigger on `.` or `(`; must be language-defined
 - [x] **No signature help handler** — fixed: handler + trigger characters from lsp config
-- [ ] **No `semanticToken` customization** — token types and modifiers are fully automatic with no override; blocks languages that need `readonly`, `async`, `deprecated` modifiers or `parameter` vs `variable` distinction
+- [x] **No `semanticToken` customization** — fixed: `semanticToken` property on `LspRule` supports string shorthand or `{ type, modifiers }` object form
 
 ### DX & Robustness
 
