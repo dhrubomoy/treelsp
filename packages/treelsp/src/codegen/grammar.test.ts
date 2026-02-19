@@ -365,4 +365,52 @@ describe('generateGrammar', () => {
     const result = generateGrammar(definition);
     expect(result).toContain('token.immediate(');
   });
+
+  it('throws when entry rule does not exist in grammar', () => {
+    const definition = {
+      name: 'Test',
+      fileExtensions: ['.test'],
+      entry: 'nonexistent',
+      grammar: {
+        program: (r: any) => r.token('x'),
+      },
+    } as LanguageDefinition;
+
+    expect(() => generateGrammar(definition))
+      .toThrow("Entry rule 'nonexistent' is not defined in grammar");
+  });
+
+  it('throws when word rule does not exist in grammar', () => {
+    const definition = {
+      name: 'Test',
+      fileExtensions: ['.test'],
+      entry: 'program',
+      word: 'identifieer',
+      grammar: {
+        program: (r: any) => r.token('x'),
+        identifier: (r: any) => r.token(/[a-z]+/),
+      },
+    } as LanguageDefinition;
+
+    expect(() => generateGrammar(definition))
+      .toThrow("Word rule 'identifieer' is not defined in grammar");
+  });
+
+  it('throws when word rule is not a token rule', () => {
+    const definition = {
+      name: 'Test',
+      fileExtensions: ['.test'],
+      entry: 'program',
+      word: 'expression',
+      grammar: {
+        program: (r: any) => r.repeat(r.rule('expression')),
+        expression: (r: any) => r.choice(r.rule('identifier'), r.rule('number')),
+        identifier: (r: any) => r.token(/[a-z]+/),
+        number: (r: any) => r.token(/[0-9]+/),
+      },
+    } as LanguageDefinition;
+
+    expect(() => generateGrammar(definition))
+      .toThrow("Word rule 'expression' must be a token rule");
+  });
 });

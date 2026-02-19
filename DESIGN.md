@@ -1084,7 +1084,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **No `externals` support** — hard blocker for external scanners (Python indent/dedent, heredocs, template literals)
 - [ ] **No `supertypes` support** — affects Tree-sitter tooling integration
 - [ ] **No `inline` support** — needed for performance-sensitive grammars
-- [ ] **No validation of `entry`/`word`** — typos produce cryptic tree-sitter CLI errors; should catch at codegen time
+- [x] **No validation of `entry`/`word`** — fixed: `generateGrammar()` validates existence and that `word` is a token rule
 
 ### Missing LSP Features
 

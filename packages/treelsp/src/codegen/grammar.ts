@@ -242,6 +242,30 @@ export function generateGrammar<T extends string>(
     rules[name] = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
   }
 
+  // Validate entry rule exists
+  if (!(definition.entry in rules)) {
+    const available = Object.keys(rules).sort().join(', ');
+    throw new Error(
+      `Entry rule '${definition.entry}' is not defined in grammar. Available rules: ${available}`
+    );
+  }
+
+  // Validate word rule exists and is a token rule
+  if (definition.word) {
+    if (!(definition.word in rules)) {
+      const available = Object.keys(rules).sort().join(', ');
+      throw new Error(
+        `Word rule '${definition.word}' is not defined in grammar. Available rules: ${available}`
+      );
+    }
+    const wordRule = rules[definition.word]!;
+    if (wordRule.type !== 'token') {
+      throw new Error(
+        `Word rule '${definition.word}' must be a token rule (defined with r.token()), not a '${wordRule.type}' rule`
+      );
+    }
+  }
+
   // Generate rules section
   const rulesCode = Object.entries(rules)
     .map(([name, node]) => {
