@@ -1076,7 +1076,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [x] **`init` hardcodes `^0.0.1`** — fixed: reads CLI package version at runtime
 - [x] **`defaults` export shape doesn't match README** — fixed: restructured to `defaults.lsp.hover` / `defaults.validation.$references`
 - [x] **Signature help defined but never wired** — fixed: `provideSignatureHelp` handler + `connection.onSignatureHelp` + trigger characters
-- [ ] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
+- [x] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
 - [x] **`vscode-languageserver-textdocument` is an unused dependency** — removed
 
 ### Missing Grammar Features — Blocks Real Languages

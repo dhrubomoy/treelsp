@@ -9,7 +9,7 @@ import type { DocumentState } from '../parser/tree.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
 import type { SemanticDefinition, UnresolvedPolicy } from '../../definition/semantic.js';
-import type { ValidationDefinition, ValidationContext, DiagnosticOptions } from '../../definition/validation.js';
+import type { ValidationDefinition, ValidationContext, DiagnosticOptions, TextEdit } from '../../definition/validation.js';
 import type { LspDefinition, LspContext } from '../../definition/lsp.js';
 import { createLspContext } from './context.js';
 
@@ -28,6 +28,7 @@ export interface Diagnostic {
   message: string;
   code?: string;
   source?: string;
+  fix?: { label: string; edits: TextEdit[] };
 }
 
 /**
@@ -248,6 +249,9 @@ function addValidationDiagnostic(
   };
   if (options?.code) {
     diag.code = options.code;
+  }
+  if (options?.fix) {
+    diag.fix = options.fix;
   }
   diagnostics.push(diag);
 }

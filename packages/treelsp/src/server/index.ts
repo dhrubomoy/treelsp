@@ -187,6 +187,7 @@ export function startStdioServer(options: StdioServerOptions): void {
           ? { triggerCharacters: service.completionTriggerCharacters }
           : {}),
       },
+      codeActionProvider: { codeActionKinds: ['quickfix'] },
       renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
       semanticTokensProvider: {
@@ -337,6 +338,30 @@ export function startStdioServer(options: StdioServerOptions): void {
     } catch (e) {
       connection.console.error(`[signatureHelp] error: ${String(e)}`);
       return null;
+    }
+  });
+
+  // Code actions
+  connection.onCodeAction((params) => {
+    try {
+      const state = documentStates.get(params.textDocument.uri);
+      if (!state) return [];
+      const actions = service.provideCodeActions(state, params.range);
+      return actions.map(a => ({
+        title: a.title,
+        kind: a.kind,
+        diagnostics: a.diagnostics.map(d => ({
+          range: d.range,
+          severity: severityMap[d.severity],
+          message: d.message,
+          source: d.source ?? langId,
+          ...(d.code ? { code: d.code } : {}),
+        })),
+        edit: { changes: a.edit.changes },
+      }));
+    } catch (e) {
+      connection.console.error(`[codeAction] error: ${String(e)}`);
+      return [];
     }
   });
 

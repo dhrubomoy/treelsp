@@ -4,6 +4,14 @@
  */
 
 /**
+ * A text edit — replace a range with new text
+ */
+export interface TextEdit {
+  range: { start: { line: number; character: number }; end: { line: number; character: number } };
+  newText: string;
+}
+
+/**
  * Diagnostic options
  */
 export interface DiagnosticOptions {
@@ -19,7 +27,7 @@ export interface DiagnosticOptions {
   /** Quick fix */
   fix?: {
     label: string;
-    edits: any[];
+    edits: TextEdit[];
   };
 
   /** Diagnostic code */

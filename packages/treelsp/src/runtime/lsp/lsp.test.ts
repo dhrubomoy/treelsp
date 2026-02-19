@@ -27,6 +27,7 @@ import { provideCompletion, getCompletionTriggerCharacters } from './completion.
 import { prepareRename, provideRename } from './rename.js';
 import { provideSymbols } from './symbols.js';
 import { provideSignatureHelp, getSignatureTriggerCharacters } from './signature-help.js';
+import { provideCodeActions } from './code-actions.js';
 import { DocumentManager } from './documents.js';
 import { createServer } from './server.js';
 import type { LanguageDefinition } from '../../definition/index.js';
@@ -2614,5 +2615,128 @@ describe('provideSignatureHelp', () => {
     expect(result?.activeParameter).toBe(0); // No commas before cursor
     // String label (not function)
     expect(result?.signatures[0]?.label).toBe('add(a, b)');
+  });
+});
+
+// ========== Code Actions Tests ==========
+
+describe('provideCodeActions', () => {
+  it('returns code action for diagnostic with fix', () => {
+    const actions = provideCodeActions(
+      [{
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+        severity: 'error',
+        message: 'Bad name',
+        code: 'bad-name',
+        fix: {
+          label: 'Rename to good',
+          edits: [{
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+            newText: 'good',
+          }],
+        },
+      }],
+      { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+      'file:///test.ml',
+    );
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.title).toBe('Rename to good');
+    expect(actions[0]!.kind).toBe('quickfix');
+    expect(actions[0]!.edit.changes['file:///test.ml']).toHaveLength(1);
+    expect(actions[0]!.edit.changes['file:///test.ml']![0]!.newText).toBe('good');
+  });
+
+  it('returns empty for diagnostic without fix', () => {
+    const actions = provideCodeActions(
+      [{
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+        severity: 'error',
+        message: 'Syntax error',
+      }],
+      { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+      'file:///test.ml',
+    );
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it('filters diagnostics outside requested range', () => {
+    const actions = provideCodeActions(
+      [{
+        range: { start: { line: 5, character: 0 }, end: { line: 5, character: 3 } },
+        severity: 'warning',
+        message: 'Unused',
+        fix: { label: 'Remove', edits: [{ range: { start: { line: 5, character: 0 }, end: { line: 5, character: 3 } }, newText: '' }] },
+      }],
+      { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      'file:///test.ml',
+    );
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it('includes diagnostic in code action for editor matching', () => {
+    const diag = {
+      range: { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } },
+      severity: 'error' as const,
+      message: 'Bad',
+      fix: {
+        label: 'Fix it',
+        edits: [{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } }, newText: 'good' }],
+      },
+    };
+
+    const actions = provideCodeActions(
+      [diag],
+      { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } },
+      'file:///test.ml',
+    );
+
+    expect(actions[0]!.diagnostics).toHaveLength(1);
+    expect(actions[0]!.diagnostics[0]!.message).toBe('Bad');
+  });
+});
+
+describe('computeDiagnostics — fix preservation', () => {
+  it('preserves fix field from validation options', () => {
+    const node = createMockNode('bad_node', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'x', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    (node as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+
+    const docScope = createMockDocScope({ root: globalScope, nodeScopes });
+
+    const validation: ValidationDefinition = {
+      bad_node: (n: any, ctx: any) => {
+        ctx.error(n, 'Bad node', {
+          code: 'bad',
+          fix: {
+            label: 'Fix bad node',
+            edits: [{
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+              newText: 'y',
+            }],
+          },
+        });
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const diagnostics = computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    const diag = diagnostics.find(d => d.code === 'bad');
+    expect(diag).toBeDefined();
+    expect(diag?.fix).toBeDefined();
+    expect(diag?.fix?.label).toBe('Fix bad node');
+    expect(diag?.fix?.edits).toHaveLength(1);
+    expect(diag?.fix?.edits[0]!.newText).toBe('y');
   });
 });

@@ -16,6 +16,7 @@ import { prepareRename, provideRename, type PrepareRenameResult, type RenameResu
 import { provideSymbols, type DocumentSymbol } from './symbols.js';
 import { provideSemanticTokensFull, type SemanticTokensResult } from './semantic-tokens.js';
 import { provideSignatureHelp, getSignatureTriggerCharacters, type SignatureHelpResult } from './signature-help.js';
+import { provideCodeActions, type CodeAction } from './code-actions.js';
 import type { CompletionItem } from '../../definition/lsp.js';
 
 /**
@@ -58,6 +59,9 @@ export interface LanguageService {
 
   /** Signature help */
   provideSignatureHelp(document: DocumentState, position: Position): SignatureHelpResult | null;
+
+  /** Code actions (quick fixes from diagnostics) */
+  provideCodeActions(document: DocumentState, range: { start: Position; end: Position }): CodeAction[];
 
   /** Signature help trigger characters (from lsp config) */
   signatureTriggerCharacters: string[];
@@ -156,6 +160,11 @@ export function createServer(definition: LanguageDefinition): LanguageService {
     provideSignatureHelp(document: DocumentState, position: Position): SignatureHelpResult | null {
       const docScope = getDocScope(document);
       return provideSignatureHelp(document, position, docScope, lsp, documents.getWorkspace());
+    },
+
+    provideCodeActions(document: DocumentState, range: { start: Position; end: Position }): CodeAction[] {
+      const diagnostics = this.computeDiagnostics(document);
+      return provideCodeActions(diagnostics, range, document.uri);
     },
 
     signatureTriggerCharacters: triggerChars,

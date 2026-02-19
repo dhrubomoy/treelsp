@@ -17,6 +17,7 @@ const mockConnection = {
   onReferences: vi.fn(),
   onCompletion: vi.fn(),
   onSignatureHelp: vi.fn(),
+  onCodeAction: vi.fn(),
   onPrepareRename: vi.fn(),
   onRenameRequest: vi.fn(),
   onDocumentSymbol: vi.fn(),
@@ -96,6 +97,7 @@ describe('startStdioServer', () => {
     expect(mockConnection.onDefinition).toHaveBeenCalledOnce();
     expect(mockConnection.onReferences).toHaveBeenCalledOnce();
     expect(mockConnection.onCompletion).toHaveBeenCalledOnce();
+    expect(mockConnection.onCodeAction).toHaveBeenCalledOnce();
     expect(mockConnection.onPrepareRename).toHaveBeenCalledOnce();
     expect(mockConnection.onRenameRequest).toHaveBeenCalledOnce();
     expect(mockConnection.onDocumentSymbol).toHaveBeenCalledOnce();
