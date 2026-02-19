@@ -243,7 +243,7 @@ export default defineLanguage({
       },
     },
 
-    // Hover for functions
+    // Hover and signature help for functions
     function_decl: {
       completionKind: 'Function',
       symbol: {
@@ -253,6 +253,28 @@ export default defineLanguage({
       hover(node, ctx) {
         const name = node.field('name').text;
         return `**fn** \`${name}\``;
+      },
+      signature: {
+        trigger: ['(', ','],
+        label(node) {
+          const name = node.field('name').text;
+          const paramList = node.field('params');
+          if (!paramList) return `fn ${name}()`;
+          const names = paramList.namedChildren
+            .filter((c: any) => c.type === 'parameter')
+            .map((p: any) => p.field('name').text);
+          return `fn ${name}(${names.join(', ')})`;
+        },
+        params(node) {
+          const paramList = node.field('params');
+          if (!paramList) return [];
+          return paramList.namedChildren
+            .filter((c: any) => c.type === 'parameter')
+            .map((p: any) => ({ label: p.field('name').text as string }));
+        },
+        activeParam(_node, index) {
+          return index;
+        },
       },
     },
 

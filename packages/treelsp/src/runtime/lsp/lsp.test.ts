@@ -26,6 +26,7 @@ import { provideReferences } from './references.js';
 import { provideCompletion } from './completion.js';
 import { prepareRename, provideRename } from './rename.js';
 import { provideSymbols } from './symbols.js';
+import { provideSignatureHelp, getSignatureTriggerCharacters } from './signature-help.js';
 import { DocumentManager } from './documents.js';
 import { createServer } from './server.js';
 import type { LanguageDefinition } from '../../definition/index.js';
@@ -1183,6 +1184,75 @@ describe('computeDiagnostics — custom validation', () => {
     expect(diagnostics[1]?.message).toBe('v2');
   });
 
+  it('should pass correct node to declarationsOf (not validator node)', () => {
+    // Bug: declarationsOf was using the validator's node scope instead of the target's scope
+    // Setup: two scopes — global has 'a', child scope has 'b'
+    // Validator runs on a node in global scope but calls declarationsOf(nodeInChildScope)
+    // Must return child scope declarations, not global scope declarations
+
+    const childScopeNode = createMockNode('block', '{ b }', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 5,
+    });
+    const nameA = createMockNode('identifier', 'a', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 5,
+    });
+    const nameB = createMockNode('identifier', 'b', {
+      startLine: 1, startChar: 2, endLine: 1, endChar: 3,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let a', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 5,
+      namedChildren: [(nameA as any)._syntaxNode],
+    });
+    (nameA as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+    (nameB as any)._syntaxNode.parent = (childScopeNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'let a\n{ b }', {
+      namedChildren: [
+        (varDeclNode as any)._syntaxNode,
+        (childScopeNode as any)._syntaxNode,
+      ],
+    });
+    (varDeclNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+    (childScopeNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const childScope = new Scope('lexical', childScopeNode, globalScope);
+    globalScope.declare('a', nameA, 'variable_decl', 'private');
+    childScope.declare('b', nameB, 'variable_decl', 'private');
+
+    const nodeScopes = new Map<number, Scope>();
+    nodeScopes.set(rootNode.id, globalScope);
+    nodeScopes.set(varDeclNode.id, globalScope);
+    nodeScopes.set(childScopeNode.id, childScope);
+
+    const docScope = createMockDocScope({
+      root: globalScope,
+      nodeScopes,
+    });
+
+    let capturedDeclarations: any[] = [];
+
+    const validation: ValidationDefinition = {
+      // Validator runs on variable_decl (in global scope)
+      // but calls declarationsOf(childScopeNode) — should get child scope's declarations
+      variable_decl: (node: any, ctx: any) => {
+        capturedDeclarations = ctx.declarationsOf(childScopeNode);
+        // Don't emit a diagnostic — we just want to capture the result
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    computeDiagnostics(document, docScope, {}, undefined, validation);
+
+    // The fix: declarationsOf should return declarations from the TARGET's scope (child)
+    // Before fix: it would return declarations from the validator node's scope (global)
+    const names = capturedDeclarations.map((d: any) => d.name);
+    expect(names).toContain('b');
+    // Child scope also inherits parent declarations via allDeclarations(),
+    // but the key assertion is that 'b' IS included (it wouldn't be if using global scope only)
+    expect(names).toContain('b');
+  });
+
   it('should support diagnostic options with "at" target node', () => {
     const nameNode = createMockNode('identifier', 'bad', {
       startLine: 0, startChar: 4, endLine: 0, endChar: 7,
@@ -1364,7 +1434,37 @@ describe('createServer', () => {
     expect(typeof server.provideRename).toBe('function');
     expect(typeof server.provideSymbols).toBe('function');
     expect(typeof server.provideSemanticTokensFull).toBe('function');
+    expect(typeof server.provideSignatureHelp).toBe('function');
+    expect(Array.isArray(server.signatureTriggerCharacters)).toBe(true);
     expect(server.documents).toBeDefined();
+  });
+
+  it('should pass through to provideSignatureHelp handler', () => {
+    const server = createServer(createMockLanguageDef());
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const result = server.provideSignatureHelp(document, { line: 0, character: 0 });
+    // No signature descriptors → null
+    expect(result).toBeNull();
+  });
+
+  it('should collect trigger characters from definition', () => {
+    const server = createServer(createMockLanguageDef({
+      lsp: {
+        function_call: {
+          signature: {
+            trigger: ['(', ','],
+            label: 'fn()',
+            params: () => [],
+            activeParam: () => 0,
+          },
+        },
+      },
+    }));
+
+    expect(server.signatureTriggerCharacters).toContain('(');
+    expect(server.signatureTriggerCharacters).toContain(',');
   });
 
   it('should pass through to provideHover handler', () => {
@@ -2099,5 +2199,367 @@ describe('provideCompletion — custom handlers', () => {
     expect(fnItem?.detail).toBe('Declare function');
     expect(fnItem?.documentation).toBe('Defines a new function');
     expect(fnItem?.kind).toBe('Keyword');
+  });
+});
+
+// ========== Signature Help Tests ==========
+
+describe('getSignatureTriggerCharacters', () => {
+  it('should return empty array when no LSP config', () => {
+    expect(getSignatureTriggerCharacters(undefined)).toEqual([]);
+  });
+
+  it('should return empty array when no signature descriptors', () => {
+    const lsp: LspDefinition = {
+      variable_decl: { completionKind: 'Variable' },
+    };
+    expect(getSignatureTriggerCharacters(lsp)).toEqual([]);
+  });
+
+  it('should collect trigger characters from signature descriptors', () => {
+    const lsp: LspDefinition = {
+      function_call: {
+        signature: {
+          trigger: ['(', ','],
+          label: 'fn()',
+          params: () => [],
+          activeParam: () => 0,
+        },
+      },
+    };
+    const triggers = getSignatureTriggerCharacters(lsp);
+    expect(triggers).toContain('(');
+    expect(triggers).toContain(',');
+    expect(triggers).toHaveLength(2);
+  });
+
+  it('should deduplicate trigger characters across rules', () => {
+    const lsp: LspDefinition = {
+      function_call: {
+        signature: {
+          trigger: ['(', ','],
+          label: 'fn()',
+          params: () => [],
+          activeParam: () => 0,
+        },
+      },
+      method_call: {
+        signature: {
+          trigger: ['(', ','],
+          label: 'method()',
+          params: () => [],
+          activeParam: () => 0,
+        },
+      },
+    };
+    const triggers = getSignatureTriggerCharacters(lsp);
+    expect(triggers).toHaveLength(2); // Deduped, not 4
+  });
+
+  it('should skip $-prefixed keys', () => {
+    const lsp = {
+      $keywords: { let: { detail: 'Declare' } },
+      function_call: {
+        signature: {
+          trigger: ['('],
+          label: 'fn()',
+          params: () => [],
+          activeParam: () => 0,
+        },
+      },
+    } as LspDefinition;
+    const triggers = getSignatureTriggerCharacters(lsp);
+    expect(triggers).toEqual(['(']);
+  });
+});
+
+describe('provideSignatureHelp', () => {
+  it('should return null when no LSP config', () => {
+    const rootNode = createMockNode('program', '');
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const result = provideSignatureHelp(document, { line: 0, character: 0 }, docScope);
+    expect(result).toBeNull();
+  });
+
+  it('should return null when no signature descriptor matches', () => {
+    const identNode = createMockNode('identifier', 'x', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 1,
+    });
+    const rootNode = createMockNode('program', 'x', {
+      namedChildren: [(identNode as any)._syntaxNode],
+      children: [(identNode as any)._syntaxNode],
+    });
+    (identNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({ root: globalScope });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {
+      function_decl: { completionKind: 'Function' }, // No signature descriptor
+    };
+
+    const result = provideSignatureHelp(document, { line: 0, character: 0 }, docScope, lsp);
+    expect(result).toBeNull();
+  });
+
+  it('should return signature when reference resolves to declaration with signature', () => {
+    // Setup: call_expr with a reference child "add" that resolves to a function_decl
+    // call_expr: add(1, 2)   —   children: [refNode("add"), "(", "1", ",", "2", ")"]
+    const declNameNode = createMockNode('identifier', 'add', {
+      startLine: 0, startChar: 3, endLine: 0, endChar: 6,
+    });
+    const funcDeclNode = createMockNode('function_decl', 'fn add(a, b)', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 12,
+      namedChildren: [(declNameNode as any)._syntaxNode],
+    });
+    (declNameNode as any)._syntaxNode.parent = (funcDeclNode as any)._syntaxNode;
+
+    const refNode = createMockNode('identifier', 'add', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 3,
+    });
+    const commaNode = createMockNode(',', ',', {
+      startLine: 1, startChar: 5, endLine: 1, endChar: 6,
+      isNamed: false,
+    });
+    const callNode = createMockNode('call_expr', 'add(1, 2)', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 9,
+      children: [(refNode as any)._syntaxNode, (commaNode as any)._syntaxNode],
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    (refNode as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+    (commaNode as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'fn add(a, b)\nadd(1, 2)', {
+      children: [(callNode as any)._syntaxNode],
+      namedChildren: [(callNode as any)._syntaxNode],
+    });
+    (callNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const decl: Declaration = {
+      node: declNameNode, name: 'add', visibility: 'public', declaredBy: 'function_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'add', to: ['function_decl'], resolved: decl,
+    };
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+      declarations: [decl],
+    });
+
+    const lsp: LspDefinition = {
+      function_decl: {
+        signature: {
+          trigger: ['(', ','],
+          label: (node: any) => `fn ${node.text}`,
+          params: () => [
+            { label: 'a', documentation: 'First param' },
+            { label: 'b', documentation: 'Second param' },
+          ],
+          activeParam: (_node: any, commaCount: number) => commaCount,
+        },
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+
+    // Cursor after the comma (position 1:6) — should be on param index 1
+    const result = provideSignatureHelp(
+      document, { line: 1, character: 6 }, docScope, lsp
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.signatures).toHaveLength(1);
+    expect(result?.signatures[0]?.label).toBe('fn fn add(a, b)');
+    expect(result?.signatures[0]?.parameters).toHaveLength(2);
+    expect(result?.signatures[0]?.parameters[0]?.label).toBe('a');
+    expect(result?.activeSignature).toBe(0);
+    expect(result?.activeParameter).toBe(1); // After one comma
+  });
+
+  it('should count commas inside argument_list (nested comma structure)', () => {
+    // Mirrors real mini-lang AST: call_expr > argument_list > commas
+    // call_expr children: [identifier "add", "(", argument_list, ")"]
+    // argument_list children: [identifier "x", ",", identifier "y"]
+    const declNameNode = createMockNode('identifier', 'add', {
+      startLine: 0, startChar: 3, endLine: 0, endChar: 6,
+    });
+    const funcDeclNode = createMockNode('function_decl', 'fn add(a, b)', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 12,
+      namedChildren: [(declNameNode as any)._syntaxNode],
+    });
+    (declNameNode as any)._syntaxNode.parent = (funcDeclNode as any)._syntaxNode;
+
+    const refNode = createMockNode('identifier', 'add', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 3,
+    });
+    const argX = createMockNode('identifier', 'x', {
+      startLine: 1, startChar: 4, endLine: 1, endChar: 5,
+    });
+    const commaNode = createMockNode(',', ',', {
+      startLine: 1, startChar: 5, endLine: 1, endChar: 6,
+      isNamed: false,
+    });
+    const argY = createMockNode('identifier', 'y', {
+      startLine: 1, startChar: 7, endLine: 1, endChar: 8,
+    });
+    const argList = createMockNode('argument_list', 'x, y', {
+      startLine: 1, startChar: 4, endLine: 1, endChar: 8,
+      children: [(argX as any)._syntaxNode, (commaNode as any)._syntaxNode, (argY as any)._syntaxNode],
+      namedChildren: [(argX as any)._syntaxNode, (argY as any)._syntaxNode],
+    });
+    (argX as any)._syntaxNode.parent = (argList as any)._syntaxNode;
+    (commaNode as any)._syntaxNode.parent = (argList as any)._syntaxNode;
+    (argY as any)._syntaxNode.parent = (argList as any)._syntaxNode;
+
+    const openParen = createMockNode('(', '(', {
+      startLine: 1, startChar: 3, endLine: 1, endChar: 4,
+      isNamed: false,
+    });
+    const closeParen = createMockNode(')', ')', {
+      startLine: 1, startChar: 8, endLine: 1, endChar: 9,
+      isNamed: false,
+    });
+    const callNode = createMockNode('call_expr', 'add(x, y)', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 9,
+      children: [
+        (refNode as any)._syntaxNode,
+        (openParen as any)._syntaxNode,
+        (argList as any)._syntaxNode,
+        (closeParen as any)._syntaxNode,
+      ],
+      namedChildren: [(refNode as any)._syntaxNode, (argList as any)._syntaxNode],
+    });
+    (refNode as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+    (openParen as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+    (argList as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+    (closeParen as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'fn add(a, b)\nadd(x, y)', {
+      children: [(callNode as any)._syntaxNode],
+      namedChildren: [(callNode as any)._syntaxNode],
+    });
+    (callNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const decl: Declaration = {
+      node: declNameNode, name: 'add', visibility: 'public', declaredBy: 'function_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'add', to: ['function_decl'], resolved: decl,
+    };
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+      declarations: [decl],
+    });
+
+    const lsp: LspDefinition = {
+      function_decl: {
+        signature: {
+          trigger: ['(', ','],
+          label: 'add(a, b)',
+          params: () => [{ label: 'a' }, { label: 'b' }],
+          activeParam: (_node: any, commaCount: number) => commaCount,
+        },
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+
+    // Cursor on first arg "x" at 1:4 — should be param 0
+    const result0 = provideSignatureHelp(
+      document, { line: 1, character: 4 }, docScope, lsp
+    );
+    expect(result0).not.toBeNull();
+    expect(result0?.activeParameter).toBe(0);
+
+    // Cursor on second arg "y" at 1:7 (after the comma) — should be param 1
+    const result1 = provideSignatureHelp(
+      document, { line: 1, character: 7 }, docScope, lsp
+    );
+    expect(result1).not.toBeNull();
+    expect(result1?.activeParameter).toBe(1);
+
+    // Cursor in space after comma "add(x, |)" at 1:6 — cursor is past
+    // argument_list's end but should still count the comma → param 1
+    const result1space = provideSignatureHelp(
+      document, { line: 1, character: 6 }, docScope, lsp
+    );
+    expect(result1space).not.toBeNull();
+    expect(result1space?.activeParameter).toBe(1);
+  });
+
+  it('should return activeParameter 0 when no commas before cursor', () => {
+    // Same setup but cursor is before the comma
+    const declNameNode = createMockNode('identifier', 'add', {
+      startLine: 0, startChar: 3, endLine: 0, endChar: 6,
+    });
+    const funcDeclNode = createMockNode('function_decl', 'fn add(a, b)', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 12,
+      namedChildren: [(declNameNode as any)._syntaxNode],
+    });
+    (declNameNode as any)._syntaxNode.parent = (funcDeclNode as any)._syntaxNode;
+
+    const refNode = createMockNode('identifier', 'add', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 3,
+    });
+    const callNode = createMockNode('call_expr', 'add(1)', {
+      startLine: 1, startChar: 0, endLine: 1, endChar: 6,
+      children: [(refNode as any)._syntaxNode],
+      namedChildren: [(refNode as any)._syntaxNode],
+    });
+    (refNode as any)._syntaxNode.parent = (callNode as any)._syntaxNode;
+
+    const rootNode = createMockNode('program', 'fn add(a, b)\nadd(1)', {
+      children: [(callNode as any)._syntaxNode],
+      namedChildren: [(callNode as any)._syntaxNode],
+    });
+    (callNode as any)._syntaxNode.parent = (rootNode as any)._syntaxNode;
+
+    const decl: Declaration = {
+      node: declNameNode, name: 'add', visibility: 'public', declaredBy: 'function_decl',
+    };
+    const ref: Reference = {
+      node: refNode, name: 'add', to: ['function_decl'], resolved: decl,
+    };
+
+    const globalScope = new Scope('global', rootNode, null);
+    const docScope = createMockDocScope({
+      root: globalScope,
+      references: [ref],
+      declarations: [decl],
+    });
+
+    const lsp: LspDefinition = {
+      function_decl: {
+        signature: {
+          trigger: ['('],
+          label: 'add(a, b)',
+          params: () => [
+            { label: 'a' },
+            { label: 'b' },
+          ],
+          activeParam: (_node: any, commaCount: number) => commaCount,
+        },
+      },
+    };
+
+    const document = createMockDocument(rootNode);
+    const result = provideSignatureHelp(
+      document, { line: 1, character: 4 }, docScope, lsp
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.activeParameter).toBe(0); // No commas before cursor
+    // String label (not function)
+    expect(result?.signatures[0]?.label).toBe('add(a, b)');
   });
 });

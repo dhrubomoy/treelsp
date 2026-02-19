@@ -214,6 +214,54 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       expect(edits).toBeDefined();
       expect(edits!.length).toBeGreaterThanOrEqual(2);
     });
+
+    it('provides signature help inside function call', () => {
+      // line 17: "let result = add(x, y);"
+      const calls = doc.root.descendantsOfType('call_expr');
+      const addCall = calls.find(c => c.field('callee')!.text === 'add');
+      expect(addCall).toBeDefined();
+
+      // Position just after "(" in "add("
+      const callee = addCall!.field('callee')!;
+      const afterParen = {
+        line: callee.startPosition.line,
+        character: callee.endPosition.character + 1,
+      };
+
+      const sigHelp = service.provideSignatureHelp(doc, afterParen);
+      expect(sigHelp).not.toBeNull();
+      expect(sigHelp!.signatures).toHaveLength(1);
+      expect(sigHelp!.signatures[0]!.label).toContain('add');
+      expect(sigHelp!.signatures[0]!.parameters).toHaveLength(2);
+      expect(sigHelp!.signatures[0]!.parameters[0]!.label).toBe('a');
+      expect(sigHelp!.signatures[0]!.parameters[1]!.label).toBe('b');
+      expect(sigHelp!.activeParameter).toBe(0);
+    });
+
+    it('provides signature help for single-param function', () => {
+      // line 18: "let msg = greet(greeting);"
+      const calls = doc.root.descendantsOfType('call_expr');
+      const greetCall = calls.find(c => c.field('callee')!.text === 'greet');
+      expect(greetCall).toBeDefined();
+
+      const callee = greetCall!.field('callee')!;
+      const afterParen = {
+        line: callee.startPosition.line,
+        character: callee.endPosition.character + 1,
+      };
+
+      const sigHelp = service.provideSignatureHelp(doc, afterParen);
+      expect(sigHelp).not.toBeNull();
+      expect(sigHelp!.signatures[0]!.label).toContain('greet');
+      expect(sigHelp!.signatures[0]!.parameters).toHaveLength(1);
+      expect(sigHelp!.signatures[0]!.parameters[0]!.label).toBe('name');
+      expect(sigHelp!.activeParameter).toBe(0);
+    });
+
+    it('collects signature trigger characters from definition', () => {
+      expect(service.signatureTriggerCharacters).toContain('(');
+      expect(service.signatureTriggerCharacters).toContain(',');
+    });
   });
 
   // ========== Cross-file Resolution Tests ==========

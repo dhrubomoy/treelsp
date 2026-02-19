@@ -81,9 +81,26 @@ export function provideSignatureHelp(
       const declNode = ref.resolved.node.parent;
       if (!declNode) continue;
 
-      // Count commas before cursor position within the current ancestor
+      // Count commas before cursor position to determine active parameter.
+      // Commas may be direct children of `current` (flat grammar) or inside
+      // a wrapper node like `argument_list` (nested grammar). Pick the
+      // children list that actually contains comma tokens.
+      let commaSource = current.children;
+      const hasDirectComma = commaSource.some(c => !c.isNamed && c.text === ',');
+      if (!hasDirectComma) {
+        // Commas may be inside a wrapper child (e.g., argument_list).
+        // Find the named child that contains comma tokens.
+        for (const ch of current.children) {
+          if (!ch.isNamed) continue;
+          if (ch.children.some(gc => !gc.isNamed && gc.text === ',')) {
+            commaSource = ch.children;
+            break;
+          }
+        }
+      }
+
       let commaCount = 0;
-      for (const sibling of current.children) {
+      for (const sibling of commaSource) {
         // Stop counting at cursor position
         if (sibling.startPosition.line > position.line ||
           (sibling.startPosition.line === position.line &&
