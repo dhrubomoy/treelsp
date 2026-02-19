@@ -11,6 +11,12 @@ Read DESIGN.md for the full design. It is the source of truth for all decisions.
 - Ask before making any design decision not explicitly covered in DESIGN.md
 - Prefer simple and explicit over clever
 
+## After Every Change
+- Add or update unit tests to cover the change (if applicable)
+- Run `pnpm test` and make sure all tests pass
+- Run `pnpm build` and make sure there are no errors or warnings
+- Run `pnpm lint` and make sure there are no errors
+
 ## Monorepo Commands
 pnpm build           # build all packages
 pnpm test            # run all tests
