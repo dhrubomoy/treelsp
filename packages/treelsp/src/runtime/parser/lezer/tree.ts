@@ -44,6 +44,7 @@ export class LezerDocumentState {
   private meta: ParserMeta;
   private wrapperNodeSet: Set<string>;
   private fragments: readonly TreeFragment[] = [];
+  private disposed = false;
 
   constructor(
     parser: LRParser,
@@ -80,6 +81,8 @@ export class LezerDocumentState {
   }
 
   update(newText: string, newVersion?: number): void {
+    if (this.disposed) return;
+
     this.sourceText = newText;
 
     if (newVersion !== undefined) {
@@ -95,6 +98,7 @@ export class LezerDocumentState {
   }
 
   updateIncremental(changes: ContentChange[], newVersion?: number): void {
+    if (this.disposed) return;
     if (newVersion !== undefined) {
       this.metadata.version = newVersion;
     } else {
@@ -154,6 +158,7 @@ export class LezerDocumentState {
   }
 
   dispose(): void {
+    this.disposed = true;
     // Lezer trees are garbage collected — no explicit cleanup needed
     this.rootNode = null;
   }

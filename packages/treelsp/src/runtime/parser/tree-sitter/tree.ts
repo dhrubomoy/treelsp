@@ -103,6 +103,11 @@ export class TreeSitterDocumentState {
    */
   private rootNode: ASTNode | null = null;
 
+  /**
+   * Whether dispose() has been called — guards against late updates
+   */
+  private disposed = false;
+
   constructor(
     parser: Parser,
     metadata: DocumentMetadata,
@@ -160,6 +165,8 @@ export class TreeSitterDocumentState {
    * @param newVersion Document version after update (optional, will auto-increment)
    */
   update(newText: string, newVersion?: number): void {
+    if (this.disposed) return;
+
     this.sourceText = newText;
 
     if (newVersion !== undefined) {
@@ -183,9 +190,7 @@ export class TreeSitterDocumentState {
    * @param newVersion Document version after update (optional, will auto-increment)
    */
   updateIncremental(changes: ContentChange[], newVersion?: number): void {
-    if (!this.tree) {
-      throw new Error('Cannot update incrementally: no existing tree');
-    }
+    if (this.disposed || !this.tree) return;
 
     if (newVersion !== undefined) {
       this.metadata.version = newVersion;
@@ -279,6 +284,7 @@ export class TreeSitterDocumentState {
    * ```
    */
   dispose(): void {
+    this.disposed = true;
     if (this.tree) {
       this.tree.delete();
       this.tree = null;

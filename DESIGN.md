@@ -1197,7 +1197,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **`watch` doesn't track grammar.ts imports** — editing helper files doesn't trigger rebuild
 - [ ] **`build` has a brittle `import_meta` regex patch** — no check that it matched; silent failure leads to server crash
 - [ ] **No `engines` field** — `import.meta.resolve` requires Node 20+; no guard for Node 18 users
-- [ ] **`updateIncremental` throws on disposed documents** — race condition if close event fires then a pending change arrives; server handler has no try/catch
+- [x] **`updateIncremental` throws on disposed documents** — fixed: both backends no-op after dispose(); server change handler wrapped in try/catch
 
 ### Testing Gaps
 

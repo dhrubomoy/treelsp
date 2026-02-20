@@ -229,24 +229,28 @@ export function startStdioServer(options: StdioServerOptions): void {
     const state = documentStates.get(uri);
     if (!state) return;
 
-    // Check if this is a full-text change (no range = full replacement)
-    const firstChange = params.contentChanges[0];
-    if (firstChange && !('range' in firstChange)) {
-      // Full content change — use non-incremental update
-      state.update(firstChange.text, version);
-    } else {
-      // Incremental changes — use tree.edit() + incremental reparse
-      const changes: ContentChange[] = params.contentChanges
-        .filter((c): c is typeof c & { range: { start: LspPosition; end: LspPosition } } => 'range' in c)
-        .map(c => ({
-          range: c.range,
-          text: c.text,
-        }));
-      state.updateIncremental(changes, version);
-    }
+    try {
+      // Check if this is a full-text change (no range = full replacement)
+      const firstChange = params.contentChanges[0];
+      if (firstChange && !('range' in firstChange)) {
+        // Full content change — use non-incremental update
+        state.update(firstChange.text, version);
+      } else {
+        // Incremental changes — use tree.edit() + incremental reparse
+        const changes: ContentChange[] = params.contentChanges
+          .filter((c): c is typeof c & { range: { start: LspPosition; end: LspPosition } } => 'range' in c)
+          .map(c => ({
+            range: c.range,
+            text: c.text,
+          }));
+        state.updateIncremental(changes, version);
+      }
 
-    service.documents.change(state);
-    validateDocument(uri, version);
+      service.documents.change(state);
+      validateDocument(uri, version);
+    } catch (e) {
+      connection.console.error(`[change] error: ${String(e)}`);
+    }
   });
 
   // Document close

@@ -620,6 +620,43 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
     });
   });
 
+  // ========== Dispose Safety Tests ==========
+
+  describe('dispose safety', () => {
+    it('update() is a no-op after dispose()', async () => {
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///dispose.mini', version: 1, languageId: 'minilang' },
+        'let x = 10;',
+      );
+      doc.dispose();
+      expect(() => doc.update('let y = 20;')).not.toThrow();
+    });
+
+    it('updateIncremental() is a no-op after dispose()', async () => {
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///dispose.mini', version: 1, languageId: 'minilang' },
+        'let x = 10;',
+      );
+      doc.dispose();
+      expect(() => doc.updateIncremental([{
+        range: { start: { line: 0, character: 4 }, end: { line: 0, character: 5 } },
+        text: 'z',
+      }])).not.toThrow();
+    });
+
+    it('dispose() can be called multiple times', async () => {
+      const doc = await createDocumentState(
+        wasmPath,
+        { uri: 'file:///dispose.mini', version: 1, languageId: 'minilang' },
+        'let x = 10;',
+      );
+      doc.dispose();
+      expect(() => doc.dispose()).not.toThrow();
+    });
+  });
+
   // ========== Code Actions Tests ==========
 
   describe('code actions', () => {
