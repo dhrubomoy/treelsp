@@ -528,10 +528,23 @@ function serializeNode(
     }
 
     case 'prec':
-    case 'prec.left':
-    case 'prec.right':
     case 'prec.dynamic': {
       const precName = `prec${node.level >= 0 ? node.level : '_neg' + Math.abs(node.level)}`;
+      const inner = recurse(node.rule);
+      return `!${precName} ${inner}`;
+    }
+
+    case 'prec.left':
+    case 'prec.right': {
+      const precName = `prec${node.level >= 0 ? node.level : '_neg' + Math.abs(node.level)}`;
+      // For left/right associative precedence wrapping a seq,
+      // place the marker after the first element (the left operand)
+      // — that's where the shift/reduce conflict occurs
+      if (node.rule.type === 'seq' && node.rule.rules.length >= 2) {
+        const first = recurse(node.rule.rules[0]!);
+        const rest = node.rule.rules.slice(1).map(recurse);
+        return `${first} !${precName} ${rest.join(' ')}`;
+      }
       const inner = recurse(node.rule);
       return `!${precName} ${inner}`;
     }

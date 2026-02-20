@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## What This Project Is
-treelsp — a grammar-first LSP generator using Tree-sitter as the parsing backend.
+treelsp — a grammar-first LSP generator with pluggable parser backends (Tree-sitter, Lezer).
 Read DESIGN.md for the full design. It is the source of truth for all decisions.
 
 ## How To Work On This Project
@@ -32,7 +32,7 @@ pnpm --filter treelsp build   # build a single package
 
 ## Decisions Already Made — Do Not Revisit
 - Grammar builder uses r => function style: r.seq(), r.choice(), r.repeat() etc.
-- Builder method names match Tree-sitter exactly (seq, choice, repeat, prec, field...)
+- Builder method names are inspired by Tree-sitter (seq, choice, repeat, prec, field...) but serve as a backend-agnostic grammar API — each backend's codegen maps them appropriately
 - r.rule('name') is used instead of $.name — same concept, type-safe
 - No custom DSL — TypeScript is the grammar definition format
 - 4 packages: treelsp, @treelsp/cli, @treelsp/vscode, examples
