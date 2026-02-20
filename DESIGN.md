@@ -1196,7 +1196,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **`watch` drops changes** — saves during a build are silently lost; no debounce
 - [ ] **`watch` doesn't track grammar.ts imports** — editing helper files doesn't trigger rebuild
 - [x] **`build` has a brittle `import_meta` regex patch** — fixed: server entry now uses `__dirname` directly (CJS native); regex patch removed entirely
-- [ ] **No `engines` field** — `import.meta.resolve` requires Node 20+; no guard for Node 18 users
+- [x] **No `engines` field** — fixed: added `"engines": { "node": ">=20" }` to treelsp and @treelsp/cli package.json
 - [x] **`updateIncremental` throws on disposed documents** — fixed: both backends no-op after dispose(); server change handler wrapped in try/catch
 
 ### Testing Gaps
