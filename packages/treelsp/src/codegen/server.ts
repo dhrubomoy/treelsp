@@ -21,6 +21,8 @@ export interface TreelspManifest {
     highlights: string;
     locals: string;
   };
+  /** Path to TextMate grammar for syntax highlighting, relative to manifest */
+  textmateGrammar: string;
 }
 
 /**
@@ -43,6 +45,7 @@ export function generateManifest<T extends string>(
       highlights: './queries/highlights.scm',
       locals: './queries/locals.scm',
     },
+    textmateGrammar: './syntax.tmLanguage.json',
   };
   return JSON.stringify(manifest, null, 2) + '\n';
 }

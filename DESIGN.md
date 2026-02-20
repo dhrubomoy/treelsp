@@ -1171,6 +1171,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [x] **Signature help defined but never wired** — fixed: `provideSignatureHelp` handler + `connection.onSignatureHelp` + trigger characters
 - [x] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
 - [x] **`vscode-languageserver-textdocument` is an unused dependency** — removed
+- [ ] **Launch Extension not bringing correct LSP** all of the configs in launch.json brings up the LSP for lezer, not for treesitter.
 
 ### Missing Grammar Features — Blocks Real Languages
 

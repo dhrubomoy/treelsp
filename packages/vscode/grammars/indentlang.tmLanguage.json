@@ -1,0 +1,43 @@
+{
+  "name": "IndentLang",
+  "scopeName": "source.indentlang",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#operator"
+    }
+  ],
+  "repository": {
+    "number": {
+      "match": "[0-9]+",
+      "name": "constant.numeric.indentlang"
+    },
+    "string": {
+      "match": "\"[^\"]*\"",
+      "name": "string.quoted.double.indentlang"
+    },
+    "comment": {
+      "match": "#.*",
+      "name": "comment.line.number-sign.indentlang"
+    },
+    "keyword": {
+      "match": "\\b(def|if|return)\\b",
+      "name": "keyword.control.indentlang"
+    },
+    "operator": {
+      "match": "\\*|\\+|-|\\/|=",
+      "name": "keyword.operator.indentlang"
+    }
+  }
+}

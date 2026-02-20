@@ -9,7 +9,7 @@ import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, unlinkSync } from 'node:fs';
 import { build as esbuildBuild } from 'esbuild';
-import { generateAstTypes, generateManifest } from 'treelsp/codegen';
+import { generateAstTypes, generateManifest, generateTextmate } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
 import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
 import { getCodegenBackend } from '../backends.js';
@@ -64,9 +64,10 @@ export async function generateProject(project: ResolvedLanguageProject): Promise
     // Generate backend-specific artifacts (grammar, queries, etc.)
     const artifacts = backend.generate(definition);
 
-    // Generate shared artifacts (AST types, manifest)
+    // Generate shared artifacts (AST types, manifest, TextMate grammar)
     const astTypes = generateAstTypes(definition);
     const manifest = generateManifest(definition);
+    const textmateGrammar = generateTextmate(definition);
 
     // Ensure output directory exists
     await mkdir(project.outDir, { recursive: true });
@@ -90,6 +91,7 @@ export async function generateProject(project: ResolvedLanguageProject): Promise
       // Shared artifacts
       writeFile(resolve(project.outDir, 'ast.ts'), astTypes, 'utf-8'),
       writeFile(resolve(project.outDir, 'treelsp.json'), manifest, 'utf-8'),
+      writeFile(resolve(project.outDir, 'syntax.tmLanguage.json'), textmateGrammar, 'utf-8'),
     ]);
 
     const outLabel = relative(process.cwd(), project.outDir) || project.outDir;

@@ -6,6 +6,7 @@
 // Shared codegen (backend-agnostic)
 export { generateAstTypes } from './ast-types.js';
 export { generateManifest, type TreelspManifest } from './server.js';
+export { generateTextmate } from './textmate.js';
 
 // Tree-sitter codegen (re-exported for backward compat)
 export { generateGrammar } from './tree-sitter/grammar.js';

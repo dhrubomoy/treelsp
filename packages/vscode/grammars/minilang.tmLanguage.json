@@ -1,0 +1,43 @@
+{
+  "name": "MiniLang",
+  "scopeName": "source.minilang",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#operator"
+    }
+  ],
+  "repository": {
+    "number": {
+      "match": "[0-9]+",
+      "name": "constant.numeric.minilang"
+    },
+    "string": {
+      "match": "\"[^\"]*\"",
+      "name": "string.quoted.double.minilang"
+    },
+    "comment": {
+      "match": "\\/\\/.*",
+      "name": "comment.line.double-slash.minilang"
+    },
+    "keyword": {
+      "match": "\\b(fn|let|return|var)\\b",
+      "name": "keyword.control.minilang"
+    },
+    "operator": {
+      "match": "\\*|\\+|-|\\/|=",
+      "name": "keyword.operator.minilang"
+    }
+  }
+}
