@@ -64,6 +64,8 @@ export interface StdioServerOptions {
   parserPath: string;
   /** Parser backend runtime (creates DocumentState instances) */
   backend: ParserBackendRuntime;
+  /** Enable verbose debug logging. Also enabled by TREELSP_DEBUG=1 env var. */
+  debug?: boolean;
 }
 
 /**
@@ -79,6 +81,7 @@ export interface StdioServerOptions {
 export function startStdioServer(options: StdioServerOptions): void {
   const { definition, parserPath, backend } = options;
   const langId = definition.name.toLowerCase();
+  const debug = options.debug ?? process.env['TREELSP_DEBUG'] === '1';
 
   const connection = createConnection(ProposedFeatures.all);
   const service = createServer(definition);
@@ -158,7 +161,7 @@ export function startStdioServer(options: StdioServerOptions): void {
       return;
     }
     const diagnostics = service.computeDiagnostics(state);
-    connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`).join(', ')}`)
+    if (debug) connection.console.log(`[validation] ${diagnostics.map(d => `range=${getRangeStr(d.range.start, d.range.end)} message=${d.message}`).join(', ')}`);
     void connection.sendDiagnostics({
       uri,
       version,
@@ -212,20 +215,20 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Document open — receive full text
   connection.onDidOpenTextDocument((params) => {
     const { uri, version, text } = params.textDocument;
-    connection.console.log(`[open] ${uri} v${version}`);
+    if (debug) connection.console.log(`[open] ${uri} v${version}`);
     void initDocumentState(uri, version, text).then((state) => {
       if (state) {
         service.documents.open(state);
       }
       validateDocument(uri, version);
-      connection.console.log(`[open] done ${uri}`);
+      if (debug) connection.console.log(`[open] done ${uri}`);
     });
   });
 
   // Document change — receive incremental content changes
   connection.onDidChangeTextDocument((params) => {
     const { uri, version } = params.textDocument;
-    connection.console.log(`[change] ${uri} v${version}`);
+    if (debug) connection.console.log(`[change] ${uri} v${version}`);
     const state = documentStates.get(uri);
     if (!state) return;
 
@@ -285,16 +288,15 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Definition
   connection.onDefinition((params) => {
     const state = documentStates.get(params.textDocument.uri);
-    if (!state) {
-      connection.console.log(`[definition] no state for ${params.textDocument.uri}`);
-      return null;
-    }
+    if (!state) return null;
     try {
-      const pos = params.position;
-      const node = state.root.descendantForPosition(pos);
-      connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${getRangeStr(node.startPosition, node.endPosition)}`);
       const result = service.provideDefinition(state, params.position);
-      connection.console.log(`[definition] result=${result ? `${result.uri} ${result.range.start.line}:${result.range.start.character}` : 'null'}`);
+      if (debug) {
+        const pos = params.position;
+        const node = state.root.descendantForPosition(pos);
+        connection.console.log(`[definition] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${getRangeStr(node.startPosition, node.endPosition)}`);
+        connection.console.log(`[definition] result=${result ? `${result.uri} ${result.range.start.line}:${result.range.start.character}` : 'null'}`);
+      }
       if (!result) return null;
       return { uri: result.uri, range: result.range };
     } catch (e) {
@@ -306,16 +308,15 @@ export function startStdioServer(options: StdioServerOptions): void {
   // References
   connection.onReferences((params) => {
     const state = documentStates.get(params.textDocument.uri);
-    if (!state) {
-      connection.console.log(`[references] no state for ${params.textDocument.uri}`);
-      return [];
-    }
+    if (!state) return [];
     try {
-      const pos = params.position;
-      const node = state.root.descendantForPosition(pos);
-      connection.console.log(`[references] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
       const results = service.provideReferences(state, params.position);
-      connection.console.log(`[references] found ${results.length} references`);
+      if (debug) {
+        const pos = params.position;
+        const node = state.root.descendantForPosition(pos);
+        connection.console.log(`[references] pos=${pos.line}:${pos.character} node=${node.type} "${node.text}" range=${node.startPosition.line}:${node.startPosition.character}-${node.endPosition.line}:${node.endPosition.character}`);
+        connection.console.log(`[references] found ${results.length} references`);
+      }
       return results.map(r => ({ uri: r.uri, range: r.range }));
     } catch (e) {
       connection.console.error(`[references] error: ${String(e)}`);

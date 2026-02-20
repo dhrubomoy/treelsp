@@ -1192,7 +1192,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### DX & Robustness
 
-- [ ] **Server spams debug logs** — `connection.console.log` on every open/change/definition with no way to disable
+- [x] **Server spams debug logs** — fixed: all verbose logs gated behind `debug` option / `TREELSP_DEBUG=1` env var; error logs remain unconditional
 - [ ] **`watch` drops changes** — saves during a build are silently lost; no debounce
 - [ ] **`watch` doesn't track grammar.ts imports** — editing helper files doesn't trigger rebuild
 - [ ] **`build` has a brittle `import_meta` regex patch** — no check that it matched; silent failure leads to server crash
