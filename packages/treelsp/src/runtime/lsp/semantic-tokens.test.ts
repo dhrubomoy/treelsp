@@ -4,10 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ASTNode } from '../parser/node.js';
+import type { ASTNode } from '../parser/ast-node.js';
+import { TreeSitterASTNode } from '../parser/tree-sitter/node.js';
 import { Scope, type Declaration, type Reference } from '../scope/scope.js';
 import type { DocumentScope } from '../scope/resolver.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition } from '../../definition/lsp.js';
 import { provideSemanticTokensFull, SEMANTIC_TOKEN_TYPES } from './semantic-tokens.js';
@@ -30,7 +31,7 @@ function createMockNode(
     isNamed?: boolean;
     fields?: Record<string, any>;
   }
-): ASTNode {
+): TreeSitterASTNode {
   const startLine = options?.startLine ?? 0;
   const startChar = options?.startChar ?? 0;
   const endLine = options?.endLine ?? startLine;
@@ -68,7 +69,7 @@ function createMockNode(
   };
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  return new ASTNode(mockSyntaxNode);
+  return new TreeSitterASTNode(mockSyntaxNode);
 }
 
 function createMockDocument(root: ASTNode, uri = 'file:///test.ml'): DocumentState {
@@ -100,8 +101,8 @@ describe('provideSemanticTokensFull', () => {
     expect(result.data).toEqual([]);
   });
 
-  it('classifies keyword tokens', () => {
-    // Simulate: "let" keyword as anonymous leaf
+  it('skips anonymous keyword tokens (handled by TextMate)', () => {
+    // Anonymous nodes (keywords, operators) are now handled by TextMate grammar
     const letNode = createMockNode('let', 'let', {
       startLine: 0, startChar: 0, endChar: 3, isNamed: false,
     });
@@ -117,17 +118,11 @@ describe('provideSemanticTokensFull', () => {
     };
 
     const result = provideSemanticTokensFull(doc, scope, {});
-    // Should contain a keyword token
-    expect(result.data.length).toBeGreaterThanOrEqual(5);
-    // First token: deltaLine=0, deltaChar=0, length=3, type=keyword(15), modifiers=0
-    expect(result.data[0]).toBe(0); // deltaLine
-    expect(result.data[1]).toBe(0); // deltaChar
-    expect(result.data[2]).toBe(3); // length
-    expect(result.data[3]).toBe(tokenTypeIndex('keyword')); // tokenType
-    expect(result.data[4]).toBe(0); // modifiers
+    // Anonymous nodes should produce no semantic tokens
+    expect(result.data).toEqual([]);
   });
 
-  it('classifies operator tokens', () => {
+  it('skips anonymous operator tokens (handled by TextMate)', () => {
     const opNode = createMockNode('+', '+', {
       startLine: 0, startChar: 5, endChar: 6, isNamed: false,
     });
@@ -143,8 +138,8 @@ describe('provideSemanticTokensFull', () => {
     };
 
     const result = provideSemanticTokensFull(doc, scope, {});
-    expect(result.data.length).toBeGreaterThanOrEqual(5);
-    expect(result.data[3]).toBe(tokenTypeIndex('operator'));
+    // Anonymous nodes should produce no semantic tokens
+    expect(result.data).toEqual([]);
   });
 
   it('classifies declarations with declaration modifier', () => {
@@ -266,15 +261,16 @@ describe('provideSemanticTokensFull', () => {
   });
 
   it('produces delta-encoded output sorted by position', () => {
-    // Two keywords on different lines
-    const letNode1 = createMockNode('let', 'let', {
-      startLine: 0, startChar: 0, endChar: 3, isNamed: false,
+    // Two named tokens on different lines
+    const numNode1 = createMockNode('number', '42', {
+      startLine: 0, startChar: 0, endChar: 2,
     });
-    const letNode2 = createMockNode('let', 'let', {
-      startLine: 1, startChar: 0, endChar: 3, isNamed: false,
+    const numNode2 = createMockNode('number', '99', {
+      startLine: 1, startChar: 0, endChar: 2,
     });
-    const root = createMockNode('program', 'let\nlet', {
-      children: [letNode1._syntaxNode, letNode2._syntaxNode],
+    const root = createMockNode('program', '42\n99', {
+      children: [numNode1._syntaxNode, numNode2._syntaxNode],
+      namedChildren: [numNode1._syntaxNode, numNode2._syntaxNode],
     });
     const doc = createMockDocument(root);
     const scope: DocumentScope = {
@@ -290,6 +286,7 @@ describe('provideSemanticTokensFull', () => {
     // First token: line 0
     expect(result.data[0]).toBe(0); // deltaLine
     expect(result.data[1]).toBe(0); // deltaChar
+    expect(result.data[3]).toBe(tokenTypeIndex('number'));
     // Second token: line 1 (deltaLine=1)
     expect(result.data[5]).toBe(1); // deltaLine
     expect(result.data[6]).toBe(0); // deltaChar (absolute since new line)

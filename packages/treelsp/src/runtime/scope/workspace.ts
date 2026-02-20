@@ -3,7 +3,7 @@
  * Cross-file index for imports and global symbols
  */
 
-import type { DocumentState } from '../parser/tree.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { Declaration } from './scope.js';
 import { buildScopes, type DocumentScope } from './resolver.js';

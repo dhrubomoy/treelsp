@@ -3,16 +3,14 @@
  * Exports for generated LSP servers — not part of the language definition API
  */
 
-// Parser
-// ASTNode exported as type-only (class has computed Symbol property incompatible with isolatedDeclarations)
-export { type ASTNode, type Position, type SourceProvider } from './parser/index.js';
-export {
-  DocumentState,
-  createDocumentState,
-  type DocumentMetadata,
-  type TextEdit,
-  type ContentChange,
-} from './parser/index.js';
+// Parser — abstract interfaces
+export type { ASTNode, Position, SourceProvider } from './parser/index.js';
+export type { DocumentState, DocumentMetadata, TextEdit, ContentChange } from './parser/index.js';
+export type { ParserBackend, ParserBackendCodegen, ParserBackendRuntime, BuildArtifact, CompileOptions } from './parser/index.js';
+
+// Parser — Tree-sitter implementation (default backend)
+export { TreeSitterASTNode, TreeSitterDocumentState, createDocumentState } from './parser/index.js';
+export { TreeSitterRuntime } from './parser/index.js';
 export { createParser, loadLanguage, preloadParser } from './parser/index.js';
 
 // Scope

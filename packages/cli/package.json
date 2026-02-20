@@ -37,6 +37,7 @@
   "homepage": "https://github.com/dhrubomoy/treelsp#readme",
   "bugs": "https://github.com/dhrubomoy/treelsp/issues",
   "dependencies": {
+    "@lezer/generator": "^1.8.0",
     "chokidar": "^4.0.3",
     "commander": "^12.1.0",
     "esbuild": "^0.27.3",

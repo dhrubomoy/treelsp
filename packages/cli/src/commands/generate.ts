@@ -9,9 +9,10 @@ import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync, unlinkSync } from 'node:fs';
 import { build as esbuildBuild } from 'esbuild';
-import { generateGrammar, generateAstTypes, generateManifest, generateHighlights, generateLocals } from 'treelsp/codegen';
+import { generateAstTypes, generateManifest, generateTextmate } from 'treelsp/codegen';
 import type { LanguageDefinition } from 'treelsp';
 import type { ResolvedLanguageProject, ConfigResult } from '../config.js';
+import { getCodegenBackend } from '../backends.js';
 
 /**
  * Generate code for a single language project.
@@ -57,24 +58,40 @@ export async function generateProject(project: ResolvedLanguageProject): Promise
 
     spinner.text = `Generating code for ${definition.name}...`;
 
-    // Generate code artifacts
-    const grammarJs = generateGrammar(definition);
+    // Resolve the parser backend
+    const backend = await getCodegenBackend(project.backend);
+
+    // Generate backend-specific artifacts (grammar, queries, etc.)
+    const artifacts = backend.generate(definition);
+
+    // Generate shared artifacts (AST types, manifest, TextMate grammar)
     const astTypes = generateAstTypes(definition);
     const manifest = generateManifest(definition);
-    const highlightsSCM = generateHighlights(definition);
-    const localsSCM = generateLocals(definition);
+    const textmateGrammar = generateTextmate(definition);
 
-    // Create output directories
-    const queriesDir = resolve(project.outDir, 'queries');
-    await mkdir(queriesDir, { recursive: true });
+    // Ensure output directory exists
+    await mkdir(project.outDir, { recursive: true });
 
-    // Write output files
+    // Create subdirectories needed by artifacts (e.g., queries/)
+    const artifactDirs = new Set(
+      artifacts
+        .map(a => a.path.includes('/') ? resolve(project.outDir, a.path, '..') : null)
+        .filter((d): d is string => d !== null)
+    );
+    for (const dir of artifactDirs) {
+      await mkdir(dir, { recursive: true });
+    }
+
+    // Write all files
     await Promise.all([
-      writeFile(resolve(project.outDir, 'grammar.js'), grammarJs, 'utf-8'),
+      // Backend-specific artifacts
+      ...artifacts.map(a =>
+        writeFile(resolve(project.outDir, a.path), a.content, 'utf-8')
+      ),
+      // Shared artifacts
       writeFile(resolve(project.outDir, 'ast.ts'), astTypes, 'utf-8'),
       writeFile(resolve(project.outDir, 'treelsp.json'), manifest, 'utf-8'),
-      writeFile(resolve(queriesDir, 'highlights.scm'), highlightsSCM, 'utf-8'),
-      writeFile(resolve(queriesDir, 'locals.scm'), localsSCM, 'utf-8'),
+      writeFile(resolve(project.outDir, 'syntax.tmLanguage.json'), textmateGrammar, 'utf-8'),
     ]);
 
     const outLabel = relative(process.cwd(), project.outDir) || project.outDir;

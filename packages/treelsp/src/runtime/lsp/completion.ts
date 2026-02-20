@@ -3,13 +3,12 @@
  * Scope-based + keyword + custom completions
  */
 
-import type { Position } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode, Position } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { Workspace } from '../scope/workspace.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition, LspContext, CompletionItem, CompletionKind } from '../../definition/lsp.js';
-import type { ASTNode } from '../parser/node.js';
 import { createLspContext, findNodeAtPosition, findScopeForNode } from './context.js';
 
 /**

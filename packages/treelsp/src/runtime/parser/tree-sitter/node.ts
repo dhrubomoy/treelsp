@@ -1,34 +1,25 @@
 /**
- * ASTNode wrapper
+ * Tree-sitter ASTNode implementation
  * Provides friendly API over Tree-sitter SyntaxNode
  */
 
 import type { SyntaxNode, Point } from 'web-tree-sitter';
+import type { ASTNode, Position, SourceProvider } from '../ast-node.js';
+
+// Re-export interface types for backward compatibility
+export type { ASTNode, Position, SourceProvider } from '../ast-node.js';
 
 /**
- * LSP-compatible position (0-based line and character)
- */
-export interface Position {
-  line: number;
-  character: number;
-}
-
-/**
- * Source text provider for lazy text access
- * Avoids copying text from SyntaxNode which can be slow
- */
-export type SourceProvider = () => string;
-
-/**
- * AST node wrapper providing a friendly API over Tree-sitter's SyntaxNode
+ * Tree-sitter implementation of ASTNode
  *
+ * Wraps Tree-sitter's SyntaxNode with the abstract ASTNode interface.
  * This class matches the usage patterns from DESIGN.md:
  * - node.field('name') - access named fields
  * - node.fields('params') - access repeated fields
  * - node.field('type')?.text - optional chaining
  * - node.hasChild('export') - check field existence
  */
-export class ASTNode {
+export class TreeSitterASTNode implements ASTNode {
   /**
    * Wrapped Tree-sitter SyntaxNode
    * Kept private to force API usage
@@ -74,7 +65,7 @@ export class ASTNode {
     if (!child) {
       return null;
     }
-    return new ASTNode(child, this.sourceProvider);
+    return new TreeSitterASTNode(child, this.sourceProvider);
   }
 
   /**
@@ -91,7 +82,7 @@ export class ASTNode {
    */
   fields(name: string): ASTNode[] {
     const children = this.syntaxNode.childrenForFieldName(name);
-    return children.map(child => new ASTNode(child, this.sourceProvider));
+    return children.map(child => new TreeSitterASTNode(child, this.sourceProvider));
   }
 
   /**
@@ -174,7 +165,7 @@ export class ASTNode {
     if (!parentNode) {
       return null;
     }
-    return new ASTNode(parentNode, this.sourceProvider);
+    return new TreeSitterASTNode(parentNode, this.sourceProvider);
   }
 
   /**
@@ -182,7 +173,7 @@ export class ASTNode {
    */
   get children(): ASTNode[] {
     return this.syntaxNode.children.map(
-      child => new ASTNode(child, this.sourceProvider)
+      child => new TreeSitterASTNode(child, this.sourceProvider)
     );
   }
 
@@ -191,7 +182,7 @@ export class ASTNode {
    */
   get namedChildren(): ASTNode[] {
     return this.syntaxNode.namedChildren.map(
-      child => new ASTNode(child, this.sourceProvider)
+      child => new TreeSitterASTNode(child, this.sourceProvider)
     );
   }
 
@@ -203,7 +194,7 @@ export class ASTNode {
     if (!child) {
       return null;
     }
-    return new ASTNode(child, this.sourceProvider);
+    return new TreeSitterASTNode(child, this.sourceProvider);
   }
 
   /**
@@ -214,7 +205,7 @@ export class ASTNode {
     if (!child) {
       return null;
     }
-    return new ASTNode(child, this.sourceProvider);
+    return new TreeSitterASTNode(child, this.sourceProvider);
   }
 
   /**
@@ -280,7 +271,7 @@ export class ASTNode {
     const node = endIndex !== undefined
       ? this.syntaxNode.descendantForIndex(startIndex, endIndex)
       : this.syntaxNode.descendantForIndex(startIndex);
-    return new ASTNode(node, this.sourceProvider);
+    return new TreeSitterASTNode(node, this.sourceProvider);
   }
 
   /**
@@ -294,7 +285,7 @@ export class ASTNode {
           { row: endPosition.line, column: endPosition.character }
         )
       : this.syntaxNode.descendantForPosition(start);
-    return new ASTNode(node, this.sourceProvider);
+    return new TreeSitterASTNode(node, this.sourceProvider);
   }
 
   /**
@@ -319,7 +310,7 @@ export class ASTNode {
       : undefined;
 
     const nodes = this.syntaxNode.descendantsOfType(types, start, end);
-    return nodes.map(node => new ASTNode(node, this.sourceProvider));
+    return nodes.map(node => new TreeSitterASTNode(node, this.sourceProvider));
   }
 
   // ========== Debugging ==========

@@ -8,7 +8,7 @@
     "build": "treelsp generate && treelsp build",
     "test": "vitest run",
     "lint": "eslint .",
-    "clean": "rm -rf */generated"
+    "clean": "rm -rf */generated */generated-lezer"
   },
   "dependencies": {
     "treelsp": "workspace:*"

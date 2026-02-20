@@ -16,10 +16,11 @@ import {
   type DocumentSymbol as LspDocumentSymbol,
   type CompletionItem as LspCompletionItem,
 } from 'vscode-languageserver/lib/node/main.js';
-import { createServer, createDocumentState, SEMANTIC_TOKEN_TYPES, SEMANTIC_TOKEN_MODIFIERS } from '../runtime/index.js';
+import { createServer, SEMANTIC_TOKEN_TYPES, SEMANTIC_TOKEN_MODIFIERS } from '../runtime/index.js';
 import { COMPLETION_KIND_MAP } from '../runtime/lsp/completion.js';
 import type { LanguageDefinition } from '../definition/index.js';
-import type { DocumentState, ContentChange } from '../runtime/parser/tree.js';
+import type { ParserBackendRuntime } from '../runtime/parser/backend.js';
+import type { DocumentState, ContentChange } from '../runtime/parser/document-state.js';
 import type { CompletionItem as InternalCompletionItem } from '../definition/lsp.js';
 
 /**
@@ -59,8 +60,10 @@ function getRangeStr(start: LspPosition, end: LspPosition) {
 export interface StdioServerOptions {
   /** Language definition from defineLanguage() */
   definition: LanguageDefinition;
-  /** Absolute path to grammar.wasm file */
-  wasmPath: string;
+  /** Absolute path to the compiled parser (e.g., grammar.wasm for tree-sitter) */
+  parserPath: string;
+  /** Parser backend runtime (creates DocumentState instances) */
+  backend: ParserBackendRuntime;
 }
 
 /**
@@ -74,7 +77,7 @@ export interface StdioServerOptions {
  * CST reuse on each keystroke.
  */
 export function startStdioServer(options: StdioServerOptions): void {
-  const { definition, wasmPath } = options;
+  const { definition, parserPath, backend } = options;
   const langId = definition.name.toLowerCase();
 
   const connection = createConnection(ProposedFeatures.all);
@@ -101,7 +104,7 @@ export function startStdioServer(options: StdioServerOptions): void {
     // Deduplicate: reuse in-flight init for the same URI
     let promise = pendingInits.get(uri);
     if (!promise) {
-      promise = createDocumentState(wasmPath, {
+      promise = backend.createDocumentState(parserPath, {
         uri,
         version,
         languageId: langId,

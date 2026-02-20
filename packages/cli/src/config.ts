@@ -15,6 +15,8 @@ export interface LanguageProjectConfig {
   grammar: string;
   /** Relative path to output dir (default: dirname(grammar)/generated) */
   out?: string;
+  /** Parser backend (default: "tree-sitter") */
+  backend?: string;
 }
 
 export interface TreelspConfig {
@@ -26,6 +28,8 @@ export interface ResolvedLanguageProject {
   grammarPath: string;
   projectDir: string;
   outDir: string;
+  /** Parser backend identifier (default: "tree-sitter") */
+  backend: string;
 }
 
 export interface ConfigResult {
@@ -55,6 +59,7 @@ export function resolveConfig(fileFlag?: string): ConfigResult {
       grammarPath: resolve(cwd, 'grammar.ts'),
       projectDir: cwd,
       outDir: resolve(cwd, 'generated'),
+      backend: 'tree-sitter',
     }],
   };
 }
@@ -168,6 +173,6 @@ function resolveProjects(config: TreelspConfig, configDir: string): ResolvedLang
     const outDir = lang.out
       ? resolve(configDir, lang.out)
       : resolve(projectDir, 'generated');
-    return { grammarPath, projectDir, outDir };
+    return { grammarPath, projectDir, outDir, backend: lang.backend ?? 'tree-sitter' };
   });
 }

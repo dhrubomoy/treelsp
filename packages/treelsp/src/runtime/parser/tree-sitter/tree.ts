@@ -1,49 +1,17 @@
 /**
- * Document tree
+ * Tree-sitter DocumentState implementation
  * Manages Tree-sitter tree and incremental updates
  */
 
 import type Parser from 'web-tree-sitter';
-import { ASTNode, type Position } from './node.js';
+import { TreeSitterASTNode } from './node.js';
+import type { ASTNode } from '../ast-node.js';
+import type { Position } from '../ast-node.js';
 import { createParser } from './wasm.js';
+import type { DocumentMetadata, ContentChange } from '../document-state.js';
 
-/**
- * Document metadata for LSP integration
- */
-export interface DocumentMetadata {
-  /** Document URI (file path or URL) */
-  uri: string;
-
-  /** Document version (incremented on each edit) */
-  version: number;
-
-  /** Language identifier (e.g., 'minilang', 'mylang') */
-  languageId: string;
-}
-
-/**
- * Text document edit (LSP format)
- */
-export interface TextEdit {
-  range: {
-    start: Position;
-    end: Position;
-  };
-  newText: string;
-}
-
-/**
- * Content change for incremental updates (matches LSP TextDocumentContentChangeEvent)
- */
-export interface ContentChange {
-  /** Range being replaced */
-  range: {
-    start: Position;
-    end: Position;
-  };
-  /** New text for the range */
-  text: string;
-}
+// Re-export interface types for backward compatibility
+export type { DocumentState, DocumentMetadata, TextEdit, ContentChange } from '../document-state.js';
 
 /**
  * Compute the character offset in text for a given Position.
@@ -108,7 +76,7 @@ function computeNewEndPoint(
  * - Tree-sitter uses WASM memory that must be explicitly freed
  * - Call dispose() when done with the document
  */
-export class DocumentState {
+export class TreeSitterDocumentState {
   /**
    * Document metadata
    */
@@ -166,7 +134,7 @@ export class DocumentState {
     this.tree = newTree;
 
     // Wrap root node with source provider for efficient text access
-    this.rootNode = new ASTNode(
+    this.rootNode = new TreeSitterASTNode(
       newTree.rootNode,
       () => this.sourceText
     );
@@ -348,7 +316,7 @@ export async function createDocumentState(
   wasmPath: string,
   metadata: DocumentMetadata,
   initialText: string
-): Promise<DocumentState> {
+): Promise<TreeSitterDocumentState> {
   const parser = await createParser(wasmPath);
-  return new DocumentState(parser, metadata, initialText);
+  return new TreeSitterDocumentState(parser, metadata, initialText);
 }

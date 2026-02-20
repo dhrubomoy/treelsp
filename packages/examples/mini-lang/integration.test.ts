@@ -68,8 +68,8 @@ describe.skipIf(!hasWasm)('mini-lang integration (live WASM)', () => {
       const binaryExprs = doc.root.descendantsOfType('binary_expr');
       expect(binaryExprs.length).toBeGreaterThan(0);
       const sumExpr = binaryExprs[0]!;
-      expect(sumExpr.field('left')).not.toBeNull();
-      expect(sumExpr.field('right')).not.toBeNull();
+      // left expression, operator, right expression are positional children
+      expect(sumExpr.namedChildren.length).toBeGreaterThanOrEqual(2);
     });
 
     it('parses function declarations', () => {

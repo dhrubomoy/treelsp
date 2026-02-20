@@ -33,6 +33,7 @@ describe('generateManifest', () => {
       highlights: './queries/highlights.scm',
       locals: './queries/locals.scm',
     });
+    expect(result.textmateGrammar).toBe('./syntax.tmLanguage.json');
   });
 
   it('uses lowercase language ID', () => {

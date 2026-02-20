@@ -3,7 +3,7 @@
  * Generates Tree-sitter locals.scm from language definition
  */
 
-import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder, SemanticRule } from '../definition/index.js';
+import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder, SemanticRule } from '../../definition/index.js';
 
 /**
  * Internal representation of rule nodes (shared with grammar.ts)

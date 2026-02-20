@@ -108,26 +108,10 @@ export default defineLanguage({
 
     // Binary expressions with precedence
     binary_expr: r => r.choice(
-      r.prec.left(1, r.seq(
-        r.field('left', r.rule('expression')),
-        r.field('op', '+'),
-        r.field('right', r.rule('expression')),
-      )),
-      r.prec.left(1, r.seq(
-        r.field('left', r.rule('expression')),
-        r.field('op', '-'),
-        r.field('right', r.rule('expression')),
-      )),
-      r.prec.left(2, r.seq(
-        r.field('left', r.rule('expression')),
-        r.field('op', '*'),
-        r.field('right', r.rule('expression')),
-      )),
-      r.prec.left(2, r.seq(
-        r.field('left', r.rule('expression')),
-        r.field('op', '/'),
-        r.field('right', r.rule('expression')),
-      )),
+      r.prec.left(1, r.seq(r.rule('expression'), '+', r.rule('expression'))),
+      r.prec.left(1, r.seq(r.rule('expression'), '-', r.rule('expression'))),
+      r.prec.left(2, r.seq(r.rule('expression'), '*', r.rule('expression'))),
+      r.prec.left(2, r.seq(r.rule('expression'), '/', r.rule('expression'))),
     ),
 
     // Tokens

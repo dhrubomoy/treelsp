@@ -3,8 +3,8 @@
  * Builds scope tree and resolves references to declarations
  */
 
-import type { ASTNode } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type {
   SemanticDefinition,
   SemanticRule,

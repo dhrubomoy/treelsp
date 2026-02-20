@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateHighlights } from './highlights.js';
-import type { LanguageDefinition } from '../definition/index.js';
+import type { LanguageDefinition } from '../../definition/index.js';
 
 type MiniLangRules =
   | 'program' | 'statement' | 'variable_decl' | 'expr_statement'

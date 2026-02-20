@@ -6,10 +6,10 @@
 
 ## What Is treelsp?
 
-treelsp is a grammar-first LSP generator that uses Tree-sitter as its parsing backend. You define a grammar in TypeScript → treelsp generates a full Language Server.
+treelsp is a grammar-first LSP generator with pluggable parser backends. You define a grammar in TypeScript → treelsp generates a full Language Server. The default backend is Tree-sitter, with the architecture designed so additional backends (Lezer, Chevrotain, etc.) can be added by implementing one interface.
 
 **Core value proposition:**
-- Tree-sitter's parsing (fast, error-tolerant, incremental, battle-tested)
+- Pluggable parser backends — Tree-sitter by default, extensible to Lezer, Chevrotain, etc.
 - Grammar-first developer experience (define grammar + semantics, get a full LSP)
 - TypeScript throughout — no new DSLs to learn
 
@@ -61,16 +61,23 @@ src/
     symbols.ts
     index.ts
   codegen/
-    grammar.ts               # emit grammar.js for Tree-sitter
-    ast-types.ts             # emit typed AST node interfaces
-    server.ts                # emit treelsp.json manifest
-    highlights.ts            # emit queries/highlights.scm
-    locals.ts                # emit queries/locals.scm
+    ast-types.ts             # emit typed AST node interfaces (shared)
+    server.ts                # emit treelsp.json manifest (shared)
+    tree-sitter/             # Tree-sitter backend codegen
+      grammar.ts             # emit grammar.js
+      highlights.ts          # emit queries/highlights.scm
+      locals.ts              # emit queries/locals.scm
+      codegen.ts             # TreeSitterCodegen implements ParserBackendCodegen
   runtime/
     parser/
-      node.ts                # ASTNode wrapper
-      tree.ts                # document tree, incremental updates
-      wasm.ts                # WASM loader — Node.js vs browser
+      ast-node.ts            # ASTNode interface (abstract)
+      document-state.ts      # DocumentState interface (abstract)
+      backend.ts             # ParserBackendCodegen + ParserBackendRuntime interfaces
+      tree-sitter/           # Tree-sitter backend runtime
+        node.ts              # TreeSitterASTNode implements ASTNode
+        tree.ts              # TreeSitterDocumentState implements DocumentState
+        wasm.ts              # WASM loader — Node.js vs browser
+        backend.ts           # TreeSitterRuntime implements ParserBackendRuntime
     scope/
       scope.ts
       resolver.ts
@@ -86,14 +93,24 @@ src/
       rename.ts
       symbols.ts
       semantic-tokens.ts     # semantic token encoding for syntax highlighting
-  cli/
-    generate.ts
-    build.ts
-    watch.ts
-    init.ts
+  backend/
+    tree-sitter/index.ts     # public entry: treelsp/backend/tree-sitter
+  server/
+    index.ts                 # LSP stdio transport
 ```
 
 `definition/` and `defaults/` are public API. `codegen/` and `runtime/` are internal — never imported directly by users.
+
+#### Package Export Paths
+
+| Path | Purpose |
+|------|---------|
+| `treelsp` | Public API: `defineLanguage`, types, defaults |
+| `treelsp/codegen` | CLI-only: shared codegen (ast-types, manifest) + tree-sitter re-exports |
+| `treelsp/codegen/tree-sitter` | CLI-only: `TreeSitterCodegen` class |
+| `treelsp/runtime` | Runtime: interfaces, tree-sitter implementations, scope, LSP |
+| `treelsp/backend/tree-sitter` | Server bundle: `TreeSitterRuntime` class |
+| `treelsp/server` | Server bundle: `startStdioServer()` |
 
 ### Package: `@treelsp/cli`
 
@@ -943,6 +960,72 @@ treelsp watch         # re-run generate + build on grammar.ts changes
 
 ---
 
+## Parser Backend Abstraction
+
+The parser backend is pluggable — `defineLanguage()` is parser-agnostic. Tree-sitter is the default; adding a new backend (Lezer, Chevrotain) means implementing one interface. Everything else (grammar definition, scope resolution, LSP handlers) stays untouched.
+
+```
+defineLanguage()          ← unchanged
+    ↓
+LanguageDefinition        ← unchanged
+    ↓
+ParserBackendCodegen      ← pluggable: generate + compile
+ParserBackendRuntime      ← pluggable: createDocumentState
+    ↓
+ASTNode (interface)       ← abstract, backend implements
+DocumentState (interface) ← abstract, backend implements
+    ↓
+Scope / LSP handlers      ← zero changes
+```
+
+### Two Halves
+
+Split into codegen and runtime to keep server bundles lean:
+
+**`ParserBackendCodegen`** — used by CLI at `treelsp generate` and `treelsp build` time:
+- `generate(definition)` → `BuildArtifact[]` (grammar.js, highlights.scm, etc.)
+- `compile(projectDir, outDir)` → produces loadable parser (e.g., grammar.wasm)
+- `cleanupPatterns` → build artifacts to remove after compilation
+- `getRuntimeFiles(treelspPkgDir)` → files to copy alongside server bundle (e.g., tree-sitter.wasm)
+
+**`ParserBackendRuntime`** — used by LSP server at runtime:
+- `createDocumentState(parserPath, metadata, text)` → parsed `DocumentState`
+
+### Backend Selection
+
+In `treelsp-config.json`:
+```json
+{
+  "languages": [
+    { "grammar": "my-lang/grammar.ts", "backend": "tree-sitter" }
+  ]
+}
+```
+Default when omitted: `"tree-sitter"`.
+
+### Generated Server Entry
+
+The build step generates a server entry with the correct backend baked in:
+```typescript
+import { startStdioServer } from 'treelsp/server';
+import { TreeSitterRuntime } from 'treelsp/backend/tree-sitter';
+import definition from './grammar.ts';
+
+const parserPath = resolve(__dirname, 'grammar.wasm');
+startStdioServer({ definition, parserPath, backend: new TreeSitterRuntime() });
+```
+
+### Adding a New Backend
+
+1. Create `src/runtime/parser/<backend>/` — implement `ASTNode` and `DocumentState` interfaces
+2. Create `src/codegen/<backend>/` — implement `ParserBackendCodegen`
+3. Create `src/backend/<backend>/index.ts` — public entry point for `ParserBackendRuntime`
+4. Add to CLI's `backends.ts` registry and `BACKEND_RUNTIME_IMPORT` map in `build.ts`
+5. Add export paths in `package.json` and `tsdown.config.ts`
+6. Done — scope resolution, LSP handlers, VS Code extension need zero changes
+
+---
+
 ## Implementation Order
 
 Built in this order — each step was testable before the next:
@@ -961,6 +1044,7 @@ Built in this order — each step was testable before the next:
 12. ✅ `extras` declaration — whitespace and comments in grammar definition
 13. ✅ Publish pipeline — changesets, GitHub Actions CI/CD, npm + VS Code Marketplace
 14. ✅ `semanticToken` property on `LspRule` — user-configurable token types and modifiers for declarations/references
+15. ✅ Parser backend abstraction — pluggable `ParserBackendCodegen` + `ParserBackendRuntime` interfaces; tree-sitter code moved to subdirectories
 
 ---
 
@@ -1039,6 +1123,14 @@ This section tells Claude Code what is settled and what still needs discussion.
 - Incremental parsing: Tree-sitter handles CST incrementally; AST + scope is full recompute in v1,
   designed for incremental upgrade in v2 without API changes
 
+**Parser backend abstraction**
+- Two interfaces: `ParserBackendCodegen` (CLI) and `ParserBackendRuntime` (server) — split to keep server bundles lean
+- Tree-sitter implementations: `TreeSitterCodegen`, `TreeSitterRuntime`
+- `ASTNode` and `DocumentState` are abstract interfaces; concrete classes are `TreeSitterASTNode`, `TreeSitterDocumentState`
+- All LSP handlers and scope modules depend ONLY on interfaces — zero tree-sitter imports
+- CLI owns tool resolution (e.g., tree-sitter binary path) — backends receive it via constructor
+- Config: `backend` field in `treelsp-config.json`, defaults to `"tree-sitter"`
+
 **Publishing**
 - Changesets for version management and changelogs
 - `treelsp` and `@treelsp/cli` linked versioning (bump together)
@@ -1079,6 +1171,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [x] **Signature help defined but never wired** — fixed: `provideSignatureHelp` handler + `connection.onSignatureHelp` + trigger characters
 - [x] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
 - [x] **`vscode-languageserver-textdocument` is an unused dependency** — removed
+- [ ] **Launch Extension not bringing correct LSP** all of the configs in launch.json brings up the LSP for lezer, not for treesitter.
 
 ### Missing Grammar Features — Blocks Real Languages
 

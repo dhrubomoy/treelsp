@@ -1,10 +1,18 @@
 /**
  * Semantic tokens provider
  * Classifies AST nodes into LSP semantic token types for syntax highlighting
+ *
+ * This module handles SEMANTIC classification only:
+ * - Declarations (variables, functions, parameters, etc.)
+ * - References (resolved to their declaration type)
+ * - Named token rules (comment, string, number by rule name)
+ *
+ * Syntactic highlighting (keywords, operators, punctuation) is handled by
+ * the generated TextMate grammar (syntax.tmLanguage.json).
  */
 
-import type { ASTNode } from '../parser/node.js';
-import type { DocumentState } from '../parser/tree.js';
+import type { ASTNode } from '../parser/ast-node.js';
+import type { DocumentState } from '../parser/document-state.js';
 import type { DocumentScope } from '../scope/resolver.js';
 import type { SemanticDefinition } from '../../definition/semantic.js';
 import type { LspDefinition, LspRule, CompletionKind } from '../../definition/lsp.js';
@@ -122,9 +130,6 @@ function resolveTokenInfo(lspRule: LspRule | undefined): { typeIndex: number; mo
   return { typeIndex, modifiers };
 }
 
-const BRACKETS = new Set(['(', ')', '{', '}', '[', ']']);
-const DELIMITERS = new Set([';', ',', '.', ':']);
-
 /**
  * Result of semantic tokens computation
  */
@@ -236,10 +241,6 @@ function walkForTokens(
     return;
   }
 
-  // For named nodes with semantic declares, check if the name field child
-  // should be classified. The scope resolver already tracked these in declarations.
-  // We handle this via the declNodeTokenInfo map on leaf nodes.
-
   // Recurse into all children (including anonymous)
   for (const child of node.children) {
     walkForTokens(child, tokens, declNodeTokenInfo, refNodeTokenInfo, semantic);
@@ -283,61 +284,36 @@ function classifyLeaf(
     };
   }
 
-  // 3. Anonymous nodes (keywords, operators, punctuation)
-  if (!node.isNamed) {
-    const text = node.text;
-    if (/^[a-zA-Z_]+$/.test(text)) {
-      // Alphabetic → keyword
-      return {
-        line: start.line,
-        character: start.character,
-        length,
-        tokenType: TOKEN_TYPE_INDEX['keyword']!,
-        modifiers: 0,
-      };
+  // 3. Named leaf tokens — classify by rule name (comment, string, number)
+  if (node.isNamed) {
+    const tokenClass = classifyTokenRuleName(node.type);
+    if (tokenClass) {
+      const typeIndex = TOKEN_TYPE_INDEX[tokenClass];
+      if (typeIndex !== undefined) {
+        return {
+          line: start.line,
+          character: start.character,
+          length,
+          tokenType: typeIndex,
+          modifiers: 0,
+        };
+      }
     }
-    if (BRACKETS.has(text) || DELIMITERS.has(text)) {
-      // Punctuation — don't emit semantic tokens for these,
-      // they're too noisy and VS Code themes handle them via TextMate
-      return null;
-    }
-    // Operators
-    return {
-      line: start.line,
-      character: start.character,
-      length,
-      tokenType: TOKEN_TYPE_INDEX['operator']!,
-      modifiers: 0,
-    };
-  }
 
-  // 4. Named leaf tokens — classify by rule name
-  const tokenClass = classifyTokenRuleName(node.type);
-  if (tokenClass) {
-    const typeIndex = TOKEN_TYPE_INDEX[tokenClass];
-    if (typeIndex !== undefined) {
+    // 4. Named leaf with semantic references (unresolved) — still a variable
+    const semRule = semantic[node.type];
+    if (semRule?.references) {
       return {
         line: start.line,
         character: start.character,
         length,
-        tokenType: typeIndex,
+        tokenType: TOKEN_TYPE_INDEX['variable']!,
         modifiers: 0,
       };
     }
   }
 
-  // 5. Named leaf with semantic references (unresolved) — still a variable
-  const semRule = semantic[node.type];
-  if (semRule?.references) {
-    return {
-      line: start.line,
-      character: start.character,
-      length,
-      tokenType: TOKEN_TYPE_INDEX['variable']!,
-      modifiers: 0,
-    };
-  }
-
-  // 6. Unknown leaf — skip
+  // 5. Anonymous nodes and unknown leaves — skip
+  // Keywords, operators, punctuation are handled by TextMate grammar
   return null;
 }

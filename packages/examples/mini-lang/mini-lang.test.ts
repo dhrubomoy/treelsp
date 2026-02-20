@@ -147,10 +147,10 @@ describe('mini-lang end-to-end', () => {
       expect(ast).toContain("field(name: 'value'): ExpressionNode");
     });
 
-    it('generates typed fields for binary_expr', () => {
+    it('generates no fields for binary_expr (positional children)', () => {
       const ast = generateAstTypes(definition);
-      expect(ast).toContain("field(name: 'left'): ExpressionNode");
-      expect(ast).toContain("field(name: 'right'): ExpressionNode");
+      expect(ast).not.toContain("field(name: 'left')");
+      expect(ast).not.toContain("field(name: 'right')");
     });
 
     it('generates union type', () => {

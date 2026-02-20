@@ -12,7 +12,8 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "workspaceContains:**/generated/treelsp.json"
+    "workspaceContains:**/generated/treelsp.json",
+    "workspaceContains:**/generated-lezer/treelsp.json"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -31,7 +32,39 @@
           "description": "Traces the communication between VS Code and the language server."
         }
       }
-    }
+    },
+    "languages": [
+      {
+        "id": "minilang",
+        "extensions": [
+          ".mini"
+        ],
+        "aliases": [
+          "MiniLang"
+        ]
+      },
+      {
+        "id": "indentlang",
+        "extensions": [
+          ".indent"
+        ],
+        "aliases": [
+          "IndentLang"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "minilang",
+        "scopeName": "source.minilang",
+        "path": "./grammars/minilang.tmLanguage.json"
+      },
+      {
+        "language": "indentlang",
+        "scopeName": "source.indentlang",
+        "path": "./grammars/indentlang.tmLanguage.json"
+      }
+    ]
   },
   "repository": {
     "type": "git",

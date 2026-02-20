@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateGrammar } from './grammar.js';
-import type { LanguageDefinition } from '../definition/index.js';
+import type { LanguageDefinition } from '../../definition/index.js';
 
 describe('generateGrammar', () => {
   it('generates complete grammar for mini-lang-like example', () => {
