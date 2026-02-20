@@ -82,12 +82,14 @@ export async function buildProject(project: ResolvedLanguageProject) {
 
     if (project.backend === 'lezer') {
       // Lezer: statically import the parser bundle (esbuild inlines it)
+      // Use relative path from projectDir to outDir so imports resolve correctly
+      const relOut = './' + relative(project.projectDir, project.outDir).replace(/\\/g, '/');
       serverEntry = [
         `import { startStdioServer } from 'treelsp/server';`,
         `import { ${runtimeImport.className} } from '${runtimeImport.specifier}';`,
         `import definition from './grammar.ts';`,
-        `import { parser } from './generated/parser.bundle.js';`,
-        `import parserMeta from './generated/parser-meta.json';`,
+        `import { parser } from '${relOut}/parser.bundle.js';`,
+        `import parserMeta from '${relOut}/parser-meta.json';`,
         ``,
         `const backend = new ${runtimeImport.className}(parser, parserMeta);`,
         `startStdioServer({ definition, parserPath: '', backend });`,
