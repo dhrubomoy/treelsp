@@ -9,6 +9,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/mini-lang"
       ],
+      "env": { "TREELSP_BACKEND": "tree-sitter" },
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],
@@ -22,6 +23,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/schema-lang"
       ],
+      "env": { "TREELSP_BACKEND": "tree-sitter" },
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],
@@ -35,6 +37,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/mini-lang"
       ],
+      "env": { "TREELSP_BACKEND": "lezer" },
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],
@@ -48,6 +51,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/schema-lang"
       ],
+      "env": { "TREELSP_BACKEND": "lezer" },
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],
@@ -61,6 +65,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/packages/examples/indent-lang"
       ],
+      "env": { "TREELSP_BACKEND": "lezer" },
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ],

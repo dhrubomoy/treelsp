@@ -233,8 +233,17 @@ function registerTextMateGrammars(
 async function discoverManifests(): Promise<{ manifest: TreelspManifest; manifestPath: string }[]> {
   const results: { manifest: TreelspManifest; manifestPath: string }[] = [];
 
-  // Discover manifests in both generated/ and generated-lezer/ directories
-  const patterns = ['**/generated/treelsp.json', '**/generated-lezer/treelsp.json'];
+  // TREELSP_BACKEND env var can restrict which backend is discovered (for debugging).
+  // Values: "tree-sitter" (only generated/), "lezer" (only generated-lezer/), unset = both.
+  const backendFilter = process.env['TREELSP_BACKEND'];
+  const allPatterns: string[] = [];
+  if (!backendFilter || backendFilter === 'tree-sitter') {
+    allPatterns.push('**/generated/treelsp.json');
+  }
+  if (!backendFilter || backendFilter === 'lezer') {
+    allPatterns.push('**/generated-lezer/treelsp.json');
+  }
+  const patterns = allPatterns;
   for (const pattern of patterns) {
     const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**');
     for (const uri of uris) {
