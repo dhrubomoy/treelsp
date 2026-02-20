@@ -96,14 +96,14 @@ export async function buildProject(project: ResolvedLanguageProject) {
       ].join('\n');
     } else {
       // Tree-sitter: load grammar.wasm at runtime
+      // Uses require('path').resolve(__dirname, ...) directly since the bundle is CJS,
+      // where __dirname is natively available. No import.meta.url patching needed.
       serverEntry = [
         `import { startStdioServer } from 'treelsp/server';`,
         `import { ${runtimeImport.className} } from '${runtimeImport.specifier}';`,
-        `import { resolve, dirname } from 'node:path';`,
-        `import { fileURLToPath } from 'node:url';`,
+        `import { resolve } from 'node:path';`,
         `import definition from './grammar.ts';`,
         ``,
-        `const __dirname = dirname(fileURLToPath(import.meta.url));`,
         `const parserPath = resolve(__dirname, 'grammar.wasm');`,
         ``,
         `startStdioServer({ definition, parserPath, backend: new ${runtimeImport.className}() });`,
@@ -132,16 +132,6 @@ export async function buildProject(project: ResolvedLanguageProject) {
       logLevel: 'warning',
       logOverride: { 'empty-import-meta': 'silent' },
     });
-
-    // esbuild replaces import.meta with an empty object in CJS mode,
-    // so import.meta.url becomes undefined. Patch __dirname usage directly.
-    const { readFileSync, writeFileSync } = await import('node:fs');
-    let bundleCode = readFileSync(bundlePath, 'utf-8');
-    bundleCode = bundleCode.replace(
-      /var import_meta\s*=\s*\{\s*\};/,
-      'var import_meta = { url: require("url").pathToFileURL(__filename).href };'
-    );
-    writeFileSync(bundlePath, bundleCode);
 
     // 5. Copy backend runtime files (e.g., tree-sitter.wasm)
     if (backend.getRuntimeFiles) {
