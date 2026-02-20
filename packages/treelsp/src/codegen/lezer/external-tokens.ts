@@ -121,102 +121,158 @@ const newlineChar = 10;  // '\\n'
 const space = 32;        // ' '
 const tab = 9;           // '\\t'
 
-// Context tracker maintains the indentation stack
+// Peek at the indentation (number of leading whitespace columns) at the
+// current input position. Does NOT advance the input.
+function peekIndent(input) {
+  let indent = 0;
+  let offset = 0;
+  for (;;) {
+    const ch = input.peek(offset);
+    if (ch === space) { indent++; offset++; }
+    else if (ch === tab) { indent += 8; offset++; }
+    else break;
+  }
+  return indent;
+}
+
+// Context tracker maintains the indentation stack.
+// Context objects are IMMUTABLE — shift/reduce always return new objects.
 export const trackIndent = new ContextTracker({
-  start: { stack: [0], pending: 0 },
-  shift(context, _term, _stack, _input) {
+  start: { stack: [0], pendingIndent: false, pendingDedents: 0 },
+
+  shift(context, term, _stack, input) {
+    if (term === Newline) {
+      // The input in shift() is positioned at the START of the token, not the end.
+      // Skip past the Newline content (\\n + blank lines) to reach indentation whitespace.
+      let offset = 0;
+      // Skip past newlines and blank-line whitespace
+      while (input.peek(offset) === newlineChar) offset++;
+      // Check for blank lines with whitespace
+      while (offset < 10000) {
+        const ch = input.peek(offset);
+        if (ch === space || ch === tab) {
+          // Could be blank line whitespace — peek ahead
+          let wsEnd = offset;
+          while (input.peek(wsEnd) === space || input.peek(wsEnd) === tab) wsEnd++;
+          if (input.peek(wsEnd) === newlineChar) {
+            offset = wsEnd + 1; // skip past the blank line
+            continue;
+          }
+          break; // Content line — stop
+        }
+        break;
+      }
+      // Now count indentation at the content line
+      let indent = 0;
+      while (true) {
+        const ch = input.peek(offset);
+        if (ch === space) { indent++; offset++; }
+        else if (ch === tab) { indent += 8; offset++; }
+        else break;
+      }
+      const currentIndent = context.stack[context.stack.length - 1] ?? 0;
+
+      if (indent > currentIndent) {
+        return {
+          stack: [...context.stack, indent],
+          pendingIndent: true,
+          pendingDedents: 0,
+        };
+      }
+      if (indent < currentIndent) {
+        const newStack = context.stack.slice();
+        let dedents = 0;
+        while (newStack.length > 1 && (newStack[newStack.length - 1] ?? 0) > indent) {
+          newStack.pop();
+          dedents++;
+        }
+        return { stack: newStack, pendingIndent: false, pendingDedents: dedents };
+      }
+      // Same level — clear any stale pending flags
+      if (context.pendingIndent || context.pendingDedents > 0) {
+        return { stack: context.stack, pendingIndent: false, pendingDedents: 0 };
+      }
+      return context;
+    }
+    if (term === Indent) {
+      if (context.pendingIndent) {
+        return { stack: context.stack, pendingIndent: false, pendingDedents: 0 };
+      }
+      return context;
+    }
+    if (term === Dedent) {
+      if (context.pendingDedents > 0) {
+        return { stack: context.stack, pendingIndent: false, pendingDedents: context.pendingDedents - 1 };
+      }
+      return context;
+    }
     return context;
   },
+
   reduce(context) {
     return context;
   },
+
   hash(context) {
-    return context.stack.length + (context.stack[context.stack.length - 1] || 0);
+    let h = context.stack.length * 65599;
+    for (const n of context.stack) h = ((h << 5) + h + n) | 0;
+    h = (h + (context.pendingIndent ? 317 : 0) + context.pendingDedents * 1049) | 0;
+    return h;
   },
 });
 
 export const externalTokenizer = new ExternalTokenizer((input, stack) => {
-  let context = stack.context;
+  const context = stack.context;
 
-  // Only run at the start of input or after a newline
-  // Check if we're at position 0 or the previous character was a newline
-  if (input.next === -1) return;
+  // 1. Emit pending Indent (zero-width)
+  if (context.pendingIndent) {
+    input.acceptToken(Indent);
+    return;
+  }
 
-  // If we see a newline character, accept it as Newline
+  // 2. Emit pending Dedent (zero-width)
+  if (context.pendingDedents > 0) {
+    input.acceptToken(Dedent);
+    return;
+  }
+
+  // 3. At EOF — only emit Newline if we're still inside an indented block
+  //    (stack depth > 1). This triggers dedents via the context tracker.
+  //    Do NOT emit at the top level, or the parser loops on zero-width Newlines.
+  if (input.next === -1 && context.stack.length > 1) {
+    input.acceptToken(Newline);
+    return;
+  }
+
+  // 4. At a newline character — consume \\n and any following blank lines,
+  //    but do NOT consume the indentation whitespace of the next content line.
+  //    The context tracker's shift(Newline) will peek at that whitespace to
+  //    determine indent/dedent, and @skip will consume it afterwards.
   if (input.next === newlineChar) {
     input.advance();
-    // Skip any additional blank lines
-    while (input.next === newlineChar) {
-      input.advance();
-    }
-
-    // Count indentation of the next line
-    let indent = 0;
-    while (input.next === space || input.next === tab) {
-      indent += input.next === tab ? 8 : 1;
-      input.advance();
-    }
-
-    // Skip blank lines (only whitespace before next newline or EOF)
-    if (input.next === newlineChar || input.next === -1) {
-      input.acceptToken(Newline);
-      return;
-    }
-
-    let currentIndent = context.stack[context.stack.length - 1] || 0;
-
-    if (indent > currentIndent) {
-      // Deeper indentation — emit newline, then indent will be emitted next
-      context.stack.push(indent);
-      context.pending = 0;
-      input.acceptToken(Newline);
-      return;
-    } else if (indent < currentIndent) {
-      // Shallower indentation — emit newline, dedents will follow
-      while (context.stack.length > 1 && (context.stack[context.stack.length - 1] || 0) > indent) {
-        context.stack.pop();
+    // Skip blank lines: lines that are empty or contain only whitespace
+    for (;;) {
+      if (input.next === newlineChar) {
+        input.advance();
+        continue;
       }
-      input.acceptToken(Newline);
-      return;
-    } else {
-      input.acceptToken(Newline);
-      return;
-    }
-  }
-
-  // Check for indent/dedent at the start of a line
-  // Count leading whitespace
-  let pos = input.pos;
-  let lineStart = pos;
-
-  // Check if we're at the start of the input or right after a newline was consumed
-  // This is a simplified check — the parser state helps determine context
-  if (pos === 0 || isAfterNewline(input, pos)) {
-    let indent = 0;
-    while (input.next === space || input.next === tab) {
-      indent += input.next === tab ? 8 : 1;
-      input.advance();
-    }
-
-    let currentIndent = context.stack[context.stack.length - 1] || 0;
-
-    if (indent > currentIndent) {
-      context.stack.push(indent);
-      input.acceptToken(Indent);
-      return;
-    } else if (indent < currentIndent) {
-      if (context.stack.length > 1) {
-        context.stack.pop();
-        input.acceptToken(Dedent);
-        return;
+      if (input.next === space || input.next === tab) {
+        // Peek to check if this whitespace line is blank
+        let offset = 0;
+        while (input.peek(offset) === space || input.peek(offset) === tab) offset++;
+        const after = input.peek(offset);
+        if (after === newlineChar || after === -1) {
+          // Blank line with trailing whitespace — consume it all
+          for (let i = 0; i <= offset; i++) input.advance();
+          continue;
+        }
       }
+      break;
     }
+    input.acceptToken(Newline);
+    return;
   }
 }, { contextual: true });
-
-function isAfterNewline(_input, _pos) {
-  return false; // Simplified — context tracking handles most cases
-}
 `;
 }
 

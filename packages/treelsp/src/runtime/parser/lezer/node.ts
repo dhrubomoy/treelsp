@@ -220,9 +220,11 @@ export class LezerASTNode implements ASTNode {
 
   // ========== Tree Walking ==========
 
-  descendantForIndex(startIndex: number, endIndex?: number): ASTNode {
-    const end = endIndex ?? startIndex;
-    const node = this.syntaxNode.resolveInner(startIndex, end > startIndex ? 1 : 0);
+  descendantForIndex(startIndex: number, _endIndex?: number): ASTNode {
+    // Always use side=1 so resolveInner enters child nodes at their left boundary.
+    // Lezer's side=0 stays at the parent when pos coincides with a child's start,
+    // whereas tree-sitter's descendant_for_index always returns the deepest node.
+    const node = this.syntaxNode.resolveInner(startIndex, 1);
     return new LezerASTNode(node, this.sourceProvider, this.meta);
   }
 

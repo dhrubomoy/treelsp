@@ -1,7 +1,10 @@
 {
   "languages": [
-    { "grammar": "mini-lang/grammar.ts", "backend": "lezer" },
-    { "grammar": "schema-lang/grammar.ts", "backend": "lezer" },
-    { "grammar": "indent-lang/grammar.ts", "backend": "lezer" }
+    { "grammar": "mini-lang/grammar.ts" },
+    { "grammar": "schema-lang/grammar.ts" },
+    { "grammar": "indent-lang/grammar.ts" },
+    { "grammar": "mini-lang/grammar.ts", "backend": "lezer", "out": "mini-lang/generated-lezer" },
+    { "grammar": "schema-lang/grammar.ts", "backend": "lezer", "out": "schema-lang/generated-lezer" },
+    { "grammar": "indent-lang/grammar.ts", "backend": "lezer", "out": "indent-lang/generated-lezer" }
   ]
 }

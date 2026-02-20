@@ -12,7 +12,8 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "workspaceContains:**/generated/treelsp.json"
+    "workspaceContains:**/generated/treelsp.json",
+    "workspaceContains:**/generated-lezer/treelsp.json"
   ],
   "main": "./dist/extension.js",
   "contributes": {

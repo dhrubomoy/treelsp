@@ -28,6 +28,45 @@
       "preLaunchTask": "build-extension"
     },
     {
+      "name": "Launch Extension (mini-lang-lezer)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${workspaceFolder}/packages/examples/mini-lang"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode/dist/**/*.js"
+      ],
+      "preLaunchTask": "build-extension"
+    },
+    {
+      "name": "Launch Extension (schema-lang-lezer)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${workspaceFolder}/packages/examples/schema-lang"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode/dist/**/*.js"
+      ],
+      "preLaunchTask": "build-extension"
+    },
+    {
+      "name": "Launch Extension (indent-lang-lezer)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${workspaceFolder}/packages/examples/indent-lang"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode/dist/**/*.js"
+      ],
+      "preLaunchTask": "build-extension"
+    },
+    {
       "name": "Debug Current Test",
       "type": "node",
       "request": "launch",
@@ -63,6 +102,19 @@
       "skipFiles": [
         "<node_internals>/**"
       ]
+    },
+    {
+      "name": "Attach to LSP Server (lezer)",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "outFiles": [
+        "${workspaceFolder}/packages/examples/*/generated-lezer/**/*.js"
+      ],
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
     }
   ],
   "compounds": [
@@ -78,6 +130,27 @@
       "configurations": [
         "Launch Extension (schema-lang)",
         "Attach to LSP Server"
+      ]
+    },
+    {
+      "name": "Debug Extension + Server (mini-lang-lezer)",
+      "configurations": [
+        "Launch Extension (mini-lang-lezer)",
+        "Attach to LSP Server (lezer)"
+      ]
+    },
+    {
+      "name": "Debug Extension + Server (schema-lang-lezer)",
+      "configurations": [
+        "Launch Extension (schema-lang-lezer)",
+        "Attach to LSP Server (lezer)"
+      ]
+    },
+    {
+      "name": "Debug Extension + Server (indent-lang-lezer)",
+      "configurations": [
+        "Launch Extension (indent-lang-lezer)",
+        "Attach to LSP Server (lezer)"
       ]
     }
   ]

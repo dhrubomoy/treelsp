@@ -5,4 +5,5 @@ dist
 .idea
 *.tsbuildinfo
 generated
+generated-lezer
 coverage

@@ -37,8 +37,9 @@ export async function activate(context: vscode.ExtensionContext) {
     await startLanguageClient(manifest, manifestPath, context);
   }
 
-  // Watch for new manifests appearing
+  // Watch for new manifests appearing (both tree-sitter and lezer output dirs)
   const watcher = vscode.workspace.createFileSystemWatcher('**/generated/treelsp.json');
+  const lezerWatcher = vscode.workspace.createFileSystemWatcher('**/generated-lezer/treelsp.json');
   watcher.onDidCreate(async (uri) => {
     const data = await readManifest(uri.fsPath);
     if (data) {
@@ -67,6 +68,35 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
   context.subscriptions.push(watcher);
+
+  // Lezer watcher — same handlers
+  lezerWatcher.onDidCreate(async (uri) => {
+    const data = await readManifest(uri.fsPath);
+    if (data) {
+      await startLanguageClient(data, uri.fsPath, context);
+    }
+  });
+  lezerWatcher.onDidChange(async (uri) => {
+    const key = uri.fsPath;
+    const existing = clients.get(key);
+    if (existing) {
+      await existing.stop();
+      clients.delete(key);
+    }
+    const data = await readManifest(uri.fsPath);
+    if (data) {
+      await startLanguageClient(data, uri.fsPath, context);
+    }
+  });
+  lezerWatcher.onDidDelete(async (uri) => {
+    const key = uri.fsPath;
+    const existing = clients.get(key);
+    if (existing) {
+      await existing.stop();
+      clients.delete(key);
+    }
+  });
+  context.subscriptions.push(lezerWatcher);
 }
 
 export async function deactivate(): Promise<void> {
@@ -81,11 +111,15 @@ export async function deactivate(): Promise<void> {
 async function discoverManifests(): Promise<{ manifest: TreelspManifest; manifestPath: string }[]> {
   const results: { manifest: TreelspManifest; manifestPath: string }[] = [];
 
-  const uris = await vscode.workspace.findFiles('**/generated/treelsp.json', '**/node_modules/**');
-  for (const uri of uris) {
-    const data = await readManifest(uri.fsPath);
-    if (data) {
-      results.push({ manifest: data, manifestPath: uri.fsPath });
+  // Discover manifests in both generated/ and generated-lezer/ directories
+  const patterns = ['**/generated/treelsp.json', '**/generated-lezer/treelsp.json'];
+  for (const pattern of patterns) {
+    const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**');
+    for (const uri of uris) {
+      const data = await readManifest(uri.fsPath);
+      if (data) {
+        results.push({ manifest: data, manifestPath: uri.fsPath });
+      }
     }
   }
 

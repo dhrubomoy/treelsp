@@ -83,12 +83,24 @@ export class LezerCodegen implements ParserBackendCodegen {
       build: (options: Record<string, unknown>) => Promise<void>;
     };
 
-    // Create a wrapper entry that exports both parser and metadata
-    const wrapperEntry = [
-      `export { parser } from './parser.js';`,
-      `import meta from './parser-meta.json';`,
-      `export { meta };`,
-    ].join('\n');
+    // Create a wrapper entry that exports both parser and metadata.
+    // If external tokens exist (e.g., indent/dedent), configure the parser
+    // with the context tracker so stack.context is available at runtime.
+    const hasExternalTokens = fs.existsSync(nodePath.resolve(outDir, 'tokens.js'));
+    const wrapperLines = hasExternalTokens
+      ? [
+          `import { parser as _parser } from './parser.js';`,
+          `import { trackIndent } from './tokens.js';`,
+          `export const parser = _parser.configure({ contextTracker: trackIndent });`,
+          `import meta from './parser-meta.json';`,
+          `export { meta };`,
+        ]
+      : [
+          `export { parser } from './parser.js';`,
+          `import meta from './parser-meta.json';`,
+          `export { meta };`,
+        ];
+    const wrapperEntry = wrapperLines.join('\n');
 
     fs.writeFileSync(nodePath.resolve(outDir, '_parser-entry.js'), wrapperEntry);
 

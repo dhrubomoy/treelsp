@@ -493,6 +493,20 @@ function serializeNode(
 }
 
 /**
+ * Detect a rule shaped like seq(newline, indent, repeat1(X), dedent) —
+ * the standard indentation-based block pattern.
+ */
+function isIndentBlockRule(node: RuleNode, externalRules: Set<string>): boolean {
+  if (node.type !== 'seq') return false;
+  const kids = node.rules;
+  if (kids.length < 3) return false;
+  const hasIndent = kids.some(k => k.type === 'rule' && externalRules.has(k.name) && k.name === 'indent');
+  const hasDedent = kids.some(k => k.type === 'rule' && externalRules.has(k.name) && k.name === 'dedent');
+  const hasRepeat = kids.some(k => k.type === 'repeat1');
+  return hasIndent && hasDedent && hasRepeat;
+}
+
+/**
  * Wrap in parentheses if the node is a choice or seq (complex)
  */
 function wrapIfComplex(serialized: string, node: RuleNode): string {
@@ -661,13 +675,22 @@ export function generateLezerGrammar<T extends string>(
   sections.push('');
 
   // Non-token, non-entry, non-external rules
+  const hasIndentExternals = externalRules.has('indent') && externalRules.has('dedent') && externalRules.has('newline');
   for (const [name, ruleNode] of Object.entries(rules)) {
     if (name === definition.entry) continue;
     if (tokenRules.has(name)) continue;
     if (externalRules.has(name)) continue;
 
     const pascalName = toPascalCase(name);
-    const body = serializeNode(ruleNode, tokenRules, keywords, definition.word, externalRules);
+    let body = serializeNode(ruleNode, tokenRules, keywords, definition.word, externalRules);
+
+    // For indent-based languages, allow Newline tokens between statements inside
+    // Block rules. Without this, newlines after comments or blank lines inside
+    // indented blocks would cause parse errors.
+    if (hasIndentExternals && isIndentBlockRule(ruleNode, externalRules)) {
+      body = body.replace(/(\w+)\+( Dedent)$/, '($1 | Newline)+$2');
+    }
+
     sections.push(`${pascalName} { ${body} }`);
     sections.push('');
   }

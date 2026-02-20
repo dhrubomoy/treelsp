@@ -141,7 +141,13 @@ export class LezerDocumentState {
   }
 
   get hasErrors(): boolean {
-    return this.root.isError;
+    // Walk the tree to check for any error nodes.
+    // Lezer error nodes can appear anywhere in the tree, not just at the root.
+    const cursor = this.tree.topNode.cursor();
+    do {
+      if (cursor.type.isError) return true;
+    } while (cursor.next());
+    return false;
   }
 
   dispose(): void {
