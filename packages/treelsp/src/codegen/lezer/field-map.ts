@@ -87,13 +87,12 @@ class MetadataBuilder<T extends string> {
 }
 
 /**
- * Field access descriptor for runtime
+ * Field access descriptor for runtime.
+ * Each field is backed by a wrapper node in the Lezer grammar.
  */
 export interface FieldDescriptor {
-  /** PascalCase node type of the child */
-  childType: string;
-  /** Occurrence index (0 = first child of this type, 1 = second, etc.) */
-  occurrence: number;
+  /** PascalCase wrapper node type name (e.g., "FunctionDecl__name") */
+  wrapperType: string;
 }
 
 /**
@@ -107,102 +106,59 @@ export interface ParserMeta {
   reverseNameMap: Record<string, string>;
 
   /**
-   * Field map: for each rule, maps field names to child access info.
+   * Field map: for each rule, maps field names to wrapper node types.
    * Keys are original snake_case rule names.
    */
   fieldMap: Record<string, Record<string, FieldDescriptor>>;
 
   /** Set of rule names that are token rules (PascalCase) */
   tokenRules: string[];
+
+  /** All wrapper node type names (for transparent unwrapping at runtime) */
+  wrapperNodes: string[];
 }
 
 /**
- * Find the rule name referenced inside a field node's child
- */
-function findChildRuleName(node: RuleNode): string | null {
-  switch (node.type) {
-    case 'rule':
-      return node.name;
-    case 'optional':
-    case 'repeat':
-    case 'repeat1':
-    case 'prec':
-    case 'prec.left':
-    case 'prec.right':
-    case 'prec.dynamic':
-    case 'token.immediate':
-      return findChildRuleName(node.rule);
-    case 'alias':
-      return node.name;
-    default:
-      return null;
-  }
-}
-
-/**
- * Extract field descriptors from a rule node.
- * Tracks occurrence counts for fields that reference the same child type.
+ * Extract field names from a rule node.
+ * For each field encountered, records a wrapper-based FieldDescriptor.
  */
 function extractFields(
+  parentPascal: string,
   node: RuleNode,
   fields: Record<string, FieldDescriptor>,
-  occurrenceCounts: Map<string, number>,
+  wrapperNames: Set<string>,
 ): void {
   switch (node.type) {
     case 'field': {
-      const childName = findChildRuleName(node.rule);
-      if (childName) {
-        const childPascal = toPascalCase(childName);
-        const count = occurrenceCounts.get(childPascal) ?? 0;
-        fields[node.name] = {
-          childType: childPascal,
-          occurrence: count,
-        };
-        occurrenceCounts.set(childPascal, count + 1);
-      }
+      const wrapperType = `${parentPascal}__${node.name}`;
+      fields[node.name] = { wrapperType };
+      wrapperNames.add(wrapperType);
       break;
     }
     case 'seq':
       for (const child of node.rules) {
-        extractFields(child, fields, occurrenceCounts);
+        extractFields(parentPascal, child, fields, wrapperNames);
       }
       break;
     case 'choice':
-      // For choice, each alternative starts occurrence counting fresh
-      // but we take the max occurrence from all alternatives
       for (const child of node.rules) {
-        const altFields: Record<string, FieldDescriptor> = {};
-        const altCounts = new Map<string, number>();
-        extractFields(child, altFields, altCounts);
-        // Merge: keep the field descriptor from the first alternative that defines it
-        for (const [fieldName, desc] of Object.entries(altFields)) {
-          if (!(fieldName in fields)) {
-            fields[fieldName] = desc;
-          }
-        }
-        // Merge occurrence counts: take the max
-        for (const [type, count] of altCounts) {
-          const existing = occurrenceCounts.get(type) ?? 0;
-          if (count > existing) {
-            occurrenceCounts.set(type, count);
-          }
-        }
+        extractFields(parentPascal, child, fields, wrapperNames);
       }
       break;
     case 'optional':
     case 'repeat':
     case 'repeat1':
     case 'token.immediate':
-      extractFields(node.rule, fields, occurrenceCounts);
+      extractFields(parentPascal, node.rule, fields, wrapperNames);
       break;
     case 'prec':
     case 'prec.left':
     case 'prec.right':
     case 'prec.dynamic':
-      extractFields(node.rule, fields, occurrenceCounts);
+      extractFields(parentPascal, node.rule, fields, wrapperNames);
       break;
     case 'alias':
-      extractFields(node.rule, fields, occurrenceCounts);
+      extractFields(parentPascal, node.rule, fields, wrapperNames);
       break;
     // string, regex, token, rule — no fields to extract
   }
@@ -237,12 +193,13 @@ export function generateParserMeta<T extends string>(
     }
   }
 
-  // Build field map
+  // Build field map with wrapper-based descriptors
   const fieldMap: Record<string, Record<string, FieldDescriptor>> = {};
+  const wrapperNames = new Set<string>();
   for (const [name, ruleNode] of Object.entries(rules)) {
+    const parentPascal = toPascalCase(name);
     const fields: Record<string, FieldDescriptor> = {};
-    const occurrenceCounts = new Map<string, number>();
-    extractFields(ruleNode, fields, occurrenceCounts);
+    extractFields(parentPascal, ruleNode, fields, wrapperNames);
     if (Object.keys(fields).length > 0) {
       fieldMap[name] = fields;
     }
@@ -253,5 +210,6 @@ export function generateParserMeta<T extends string>(
     reverseNameMap,
     fieldMap,
     tokenRules: tokenRuleNames,
+    wrapperNodes: [...wrapperNames],
   };
 }

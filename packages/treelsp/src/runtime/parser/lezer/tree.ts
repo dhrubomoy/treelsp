@@ -42,6 +42,7 @@ export class LezerDocumentState {
   private tree: Tree;
   private rootNode: ASTNode | null = null;
   private meta: ParserMeta;
+  private wrapperNodeSet: Set<string>;
   private fragments: readonly TreeFragment[] = [];
 
   constructor(
@@ -54,6 +55,7 @@ export class LezerDocumentState {
     this.metadata = metadata;
     this.sourceText = initialText;
     this.meta = meta;
+    this.wrapperNodeSet = new Set(meta.wrapperNodes ?? []);
 
     // Initial parse
     this.tree = this.parser.parse(initialText);
@@ -66,6 +68,7 @@ export class LezerDocumentState {
       this.tree.topNode,
       () => this.sourceText,
       this.meta,
+      this.wrapperNodeSet,
     );
   }
 

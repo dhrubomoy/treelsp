@@ -1,17 +1,22 @@
 /**
  * Lezer ASTNode implementation
  * Provides the ASTNode interface over Lezer's SyntaxNode
+ *
+ * Wrapper nodes (generated for field() support) are transparent:
+ * they never appear in children, namedChildren, parent, or other navigation.
+ * Field access finds the unique wrapper child and returns its inner content.
  */
 
 import type { SyntaxNode, TreeCursor } from '@lezer/common';
 import type { ASTNode, Position, SourceProvider } from '../ast-node.js';
-import type { ParserMeta, FieldDescriptor } from '../../../codegen/lezer/field-map.js';
+import type { ParserMeta } from '../../../codegen/lezer/field-map.js';
 
 /**
  * Lezer implementation of ASTNode
  *
  * Key differences from Tree-sitter:
- * - Field access uses a generated field map (Lezer has no native field names)
+ * - Field access uses wrapper nodes in the grammar (Lezer has no native field names)
+ * - Wrapper nodes are transparent — all navigation methods skip them
  * - Node IDs are synthetic (computed from position + type)
  * - Named/unnamed distinction uses the nodeNameMap from metadata
  * - PascalCase Lezer names are mapped back to snake_case
@@ -20,11 +25,28 @@ export class LezerASTNode implements ASTNode {
   private readonly syntaxNode: SyntaxNode;
   private readonly sourceProvider: SourceProvider;
   private readonly meta: ParserMeta;
+  private readonly wrapperNodeSet: Set<string>;
 
-  constructor(syntaxNode: SyntaxNode, sourceProvider: SourceProvider, meta: ParserMeta) {
+  constructor(
+    syntaxNode: SyntaxNode,
+    sourceProvider: SourceProvider,
+    meta: ParserMeta,
+    wrapperNodeSet: Set<string>,
+  ) {
     this.syntaxNode = syntaxNode;
     this.sourceProvider = sourceProvider;
     this.meta = meta;
+    this.wrapperNodeSet = wrapperNodeSet;
+  }
+
+  /** Check if a Lezer type name is a wrapper node */
+  private isWrapper(typeName: string): boolean {
+    return this.wrapperNodeSet.has(typeName);
+  }
+
+  /** Create an ASTNode, forwarding all context */
+  private wrap(node: SyntaxNode): LezerASTNode {
+    return new LezerASTNode(node, this.sourceProvider, this.meta, this.wrapperNodeSet);
   }
 
   // ========== Field Access (Primary API) ==========
@@ -33,15 +55,46 @@ export class LezerASTNode implements ASTNode {
     const originalType = this.type;
     const fieldDef = this.meta.fieldMap[originalType]?.[name];
     if (!fieldDef) return null;
-    return this.getChildByDescriptor(fieldDef);
+
+    // Find the wrapper child by its unique type name
+    const cursor = this.syntaxNode.cursor();
+    if (!cursor.firstChild()) return null;
+    do {
+      if (cursor.name === fieldDef.wrapperType) {
+        const wrapperNode = cursor.node;
+        // Return the wrapper's first child (the actual content)
+        const innerCursor = wrapperNode.cursor();
+        if (innerCursor.firstChild()) {
+          return this.wrap(innerCursor.node);
+        }
+        // Wrapper has no children (e.g., wraps a string literal) — return wrapper itself
+        return this.wrap(wrapperNode);
+      }
+    } while (cursor.nextSibling());
+    return null;
   }
 
   fields(name: string): ASTNode[] {
     const originalType = this.type;
     const fieldDef = this.meta.fieldMap[originalType]?.[name];
     if (!fieldDef) return [];
-    const child = this.getChildByDescriptor(fieldDef);
-    return child ? [child] : [];
+
+    // Find ALL wrapper children matching the wrapper type
+    const results: ASTNode[] = [];
+    const cursor = this.syntaxNode.cursor();
+    if (!cursor.firstChild()) return results;
+    do {
+      if (cursor.name === fieldDef.wrapperType) {
+        const wrapperNode = cursor.node;
+        const innerCursor = wrapperNode.cursor();
+        if (innerCursor.firstChild()) {
+          results.push(this.wrap(innerCursor.node));
+        } else {
+          results.push(this.wrap(wrapperNode));
+        }
+      }
+    } while (cursor.nextSibling());
+    return results;
   }
 
   childForFieldName(name: string): ASTNode | null {
@@ -50,24 +103,6 @@ export class LezerASTNode implements ASTNode {
 
   hasChild(name: string): boolean {
     return this.field(name) !== null;
-  }
-
-  private getChildByDescriptor(desc: FieldDescriptor): ASTNode | null {
-    // Find the Nth child of the given type
-    let occurrence = 0;
-    const cursor = this.syntaxNode.cursor();
-    if (!cursor.firstChild()) return null;
-
-    do {
-      if (cursor.name === desc.childType) {
-        if (occurrence === desc.occurrence) {
-          return new LezerASTNode(cursor.node, this.sourceProvider, this.meta);
-        }
-        occurrence++;
-      }
-    } while (cursor.nextSibling());
-
-    return null;
   }
 
   // ========== Identity ==========
@@ -104,16 +139,22 @@ export class LezerASTNode implements ASTNode {
   get isNamed(): boolean {
     // A node is "named" if its Lezer type name appears in the nodeNameMap
     // (i.e., it corresponds to a grammar rule or token definition)
+    // Wrapper nodes are NOT named — they are transparent
     const name = this.syntaxNode.type.name;
+    if (this.isWrapper(name)) return false;
     return name in this.meta.nodeNameMap;
   }
 
   // ========== Navigation ==========
 
   get parent(): ASTNode | null {
-    const parent = this.syntaxNode.parent;
+    // Skip wrapper parents — they are transparent
+    let parent = this.syntaxNode.parent;
+    while (parent && this.isWrapper(parent.type.name)) {
+      parent = parent.parent;
+    }
     if (!parent) return null;
-    return new LezerASTNode(parent, this.sourceProvider, this.meta);
+    return this.wrap(parent);
   }
 
   get children(): ASTNode[] {
@@ -121,7 +162,18 @@ export class LezerASTNode implements ASTNode {
     const cursor = this.syntaxNode.cursor();
     if (!cursor.firstChild()) return kids;
     do {
-      kids.push(new LezerASTNode(cursor.node, this.sourceProvider, this.meta));
+      if (this.isWrapper(cursor.name)) {
+        // Splice in the wrapper's children instead of the wrapper itself
+        const wrapperNode = cursor.node;
+        const innerCursor = wrapperNode.cursor();
+        if (innerCursor.firstChild()) {
+          do {
+            kids.push(this.wrap(innerCursor.node));
+          } while (innerCursor.nextSibling());
+        }
+      } else {
+        kids.push(this.wrap(cursor.node));
+      }
     } while (cursor.nextSibling());
     return kids;
   }
@@ -131,58 +183,38 @@ export class LezerASTNode implements ASTNode {
     const cursor = this.syntaxNode.cursor();
     if (!cursor.firstChild()) return kids;
     do {
-      const name = cursor.type.name;
-      if (name in this.meta.nodeNameMap) {
-        kids.push(new LezerASTNode(cursor.node, this.sourceProvider, this.meta));
+      if (this.isWrapper(cursor.name)) {
+        // Splice in the wrapper's named children
+        const wrapperNode = cursor.node;
+        const innerCursor = wrapperNode.cursor();
+        if (innerCursor.firstChild()) {
+          do {
+            if (innerCursor.type.name in this.meta.nodeNameMap) {
+              kids.push(this.wrap(innerCursor.node));
+            }
+          } while (innerCursor.nextSibling());
+        }
+      } else if (cursor.type.name in this.meta.nodeNameMap) {
+        kids.push(this.wrap(cursor.node));
       }
     } while (cursor.nextSibling());
     return kids;
   }
 
   child(index: number): ASTNode | null {
-    const cursor = this.syntaxNode.cursor();
-    if (!cursor.firstChild()) return null;
-    let i = 0;
-    do {
-      if (i === index) {
-        return new LezerASTNode(cursor.node, this.sourceProvider, this.meta);
-      }
-      i++;
-    } while (cursor.nextSibling());
-    return null;
+    return this.children[index] ?? null;
   }
 
   namedChild(index: number): ASTNode | null {
-    const cursor = this.syntaxNode.cursor();
-    if (!cursor.firstChild()) return null;
-    let i = 0;
-    do {
-      if (cursor.type.name in this.meta.nodeNameMap) {
-        if (i === index) {
-          return new LezerASTNode(cursor.node, this.sourceProvider, this.meta);
-        }
-        i++;
-      }
-    } while (cursor.nextSibling());
-    return null;
+    return this.namedChildren[index] ?? null;
   }
 
   get childCount(): number {
-    let count = 0;
-    const cursor = this.syntaxNode.cursor();
-    if (!cursor.firstChild()) return 0;
-    do { count++; } while (cursor.nextSibling());
-    return count;
+    return this.children.length;
   }
 
   get namedChildCount(): number {
-    let count = 0;
-    const cursor = this.syntaxNode.cursor();
-    if (!cursor.firstChild()) return 0;
-    do {
-      if (cursor.type.name in this.meta.nodeNameMap) count++;
-    } while (cursor.nextSibling());
-    return count;
+    return this.namedChildren.length;
   }
 
   // ========== Position (LSP Format) ==========
@@ -224,8 +256,17 @@ export class LezerASTNode implements ASTNode {
     // Always use side=1 so resolveInner enters child nodes at their left boundary.
     // Lezer's side=0 stays at the parent when pos coincides with a child's start,
     // whereas tree-sitter's descendant_for_index always returns the deepest node.
-    const node = this.syntaxNode.resolveInner(startIndex, 1);
-    return new LezerASTNode(node, this.sourceProvider, this.meta);
+    let node = this.syntaxNode.resolveInner(startIndex, 1);
+    // If we landed on a wrapper node, descend into its inner content
+    while (this.isWrapper(node.type.name)) {
+      const child = node.firstChild;
+      if (child) {
+        node = child;
+      } else {
+        break; // Empty wrapper — stay here
+      }
+    }
+    return this.wrap(node);
   }
 
   descendantForPosition(startPosition: Position, endPosition?: Position): ASTNode {
@@ -256,8 +297,9 @@ export class LezerASTNode implements ASTNode {
     const results: ASTNode[] = [];
     const cursor = this.syntaxNode.cursor();
     walkCursor(cursor, (c) => {
+      // Wrapper nodes are never returned — but we still descend into them
       if (c.from >= startOffset && c.to <= endOffset && lezerTypes.has(c.type.name)) {
-        results.push(new LezerASTNode(c.node, this.sourceProvider, this.meta));
+        results.push(this.wrap(c.node));
       }
     });
 

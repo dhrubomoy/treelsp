@@ -388,7 +388,71 @@ function findClosingParen(src: string, start: number): number {
 }
 
 /**
- * Serialize a RuleNode to Lezer grammar syntax
+ * Wrapper rule definition collected during grammar analysis.
+ * Each field() in the grammar produces a wrapper rule.
+ */
+interface WrapperDef {
+  wrapperTypeName: string;   // e.g., "FunctionDecl__name"
+  innerNodes: RuleNode[];    // all inner content nodes (from different choice branches)
+}
+
+/**
+ * Walk a rule tree to collect all field() wrappers.
+ * For each (parentName, fieldName) pair, records the inner rule node.
+ * When the same field appears in multiple choice branches, merges them.
+ */
+function collectWrapperDefs(
+  parentPascal: string,
+  node: RuleNode,
+  defs: Map<string, WrapperDef>,
+): void {
+  switch (node.type) {
+    case 'field': {
+      const wrapperType = `${parentPascal}__${node.name}`;
+      // Strip quantifiers — they get hoisted to the reference site
+      let innerRule = node.rule;
+      if (innerRule.type === 'optional' || innerRule.type === 'repeat' || innerRule.type === 'repeat1') {
+        innerRule = innerRule.rule;
+      }
+      const existing = defs.get(wrapperType);
+      if (existing) {
+        existing.innerNodes.push(innerRule);
+      } else {
+        defs.set(wrapperType, { wrapperTypeName: wrapperType, innerNodes: [innerRule] });
+      }
+      break;
+    }
+    case 'seq':
+    case 'choice':
+      for (const child of node.rules) {
+        collectWrapperDefs(parentPascal, child, defs);
+      }
+      break;
+    case 'optional':
+    case 'repeat':
+    case 'repeat1':
+    case 'token.immediate':
+      collectWrapperDefs(parentPascal, node.rule, defs);
+      break;
+    case 'prec':
+    case 'prec.left':
+    case 'prec.right':
+    case 'prec.dynamic':
+      collectWrapperDefs(parentPascal, node.rule, defs);
+      break;
+    case 'alias':
+      collectWrapperDefs(parentPascal, node.rule, defs);
+      break;
+    // string, regex, token, rule — no fields
+  }
+}
+
+/**
+ * Serialize a RuleNode to Lezer grammar syntax.
+ * parentPascalName is the PascalCase name of the containing rule,
+ * used to generate wrapper type names for field() nodes.
+ * conflictMarkers maps wrapper type names to Lezer ambiguity labels (~label)
+ * for wrapper rules that share the same inner content within a parent.
  */
 function serializeNode(
   node: RuleNode,
@@ -396,7 +460,12 @@ function serializeNode(
   keywords: Set<string>,
   wordRule: string | undefined,
   externalRules: Set<string>,
+  parentPascalName: string,
+  conflictMarkers: Map<string, string>,
 ): string {
+  const recurse = (n: RuleNode) =>
+    serializeNode(n, tokenRules, keywords, wordRule, externalRules, parentPascalName, conflictMarkers);
+
   switch (node.type) {
     case 'string': {
       // If this is a keyword and there's a word rule, use kw<"...">
@@ -413,50 +482,57 @@ function serializeNode(
 
     case 'seq': {
       if (node.rules.length === 0) return '""';
-      const parts = node.rules.map(r =>
-        serializeNode(r, tokenRules, keywords, wordRule, externalRules)
-      );
+      const parts = node.rules.map(recurse);
       return parts.join(' ');
     }
 
     case 'choice': {
       if (node.rules.length === 0) return '""';
-      const parts = node.rules.map(r =>
-        serializeNode(r, tokenRules, keywords, wordRule, externalRules)
-      );
+      const parts = node.rules.map(recurse);
       if (parts.length === 1) return parts[0]!;
       return parts.join(' | ');
     }
 
     case 'optional':
-      return wrapIfComplex(
-        serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules),
-        node.rule,
-      ) + '?';
+      return wrapIfComplex(recurse(node.rule), node.rule) + '?';
 
     case 'repeat':
-      return wrapIfComplex(
-        serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules),
-        node.rule,
-      ) + '*';
+      return wrapIfComplex(recurse(node.rule), node.rule) + '*';
 
     case 'repeat1':
-      return wrapIfComplex(
-        serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules),
-        node.rule,
-      ) + '+';
+      return wrapIfComplex(recurse(node.rule), node.rule) + '+';
 
-    case 'field':
-      // Lezer doesn't have field names — just emit the child rule
-      // Field info is captured in the metadata file
-      return serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules);
+    case 'field': {
+      // Emit wrapper type name instead of the inner rule.
+      // Quantifiers on the inner rule are hoisted to the reference site.
+      const wrapperType = `${parentPascalName}__${node.name}`;
+      let ref = wrapperType;
+      // Add Lezer ambiguity marker if this wrapper conflicts with another
+      // in the same parent rule (same inner content, e.g., both wrap Expression)
+      const marker = conflictMarkers.get(wrapperType);
+      if (marker) ref += `~${marker}`;
+
+      let innerRule = node.rule;
+      let quantifier = '';
+      if (innerRule.type === 'optional') {
+        quantifier = '?';
+        innerRule = innerRule.rule;
+      } else if (innerRule.type === 'repeat') {
+        quantifier = '*';
+        innerRule = innerRule.rule;
+      } else if (innerRule.type === 'repeat1') {
+        quantifier = '+';
+        innerRule = innerRule.rule;
+      }
+      return ref + quantifier;
+    }
 
     case 'prec':
     case 'prec.left':
     case 'prec.right':
     case 'prec.dynamic': {
       const precName = `prec${node.level >= 0 ? node.level : '_neg' + Math.abs(node.level)}`;
-      const inner = serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules);
+      const inner = recurse(node.rule);
       return `!${precName} ${inner}`;
     }
 
@@ -472,11 +548,11 @@ function serializeNode(
 
     case 'token.immediate':
       // Lezer handles immediate tokens differently
-      return serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules);
+      return recurse(node.rule);
 
     case 'alias':
       // Alias is not directly supported in Lezer
-      return serializeNode(node.rule, tokenRules, keywords, wordRule, externalRules);
+      return recurse(node.rule);
 
     case 'rule': {
       // External rules are referenced by their PascalCase name
@@ -668,10 +744,56 @@ export function generateLezerGrammar<T extends string>(
   sections.push('// Generated by treelsp — do not edit');
   sections.push('');
 
+  // Collect wrapper definitions for all rules
+  const allWrapperDefs = new Map<string, WrapperDef>();
+  for (const [name, ruleNode] of Object.entries(rules)) {
+    const parentPascal = toPascalCase(name);
+    collectWrapperDefs(parentPascal, ruleNode, allWrapperDefs);
+  }
+
+  // Detect wrapper conflicts: multiple wrappers in the same parent rule
+  // with identical inner content (e.g., BinaryExpr__left and __right both wrap Expression).
+  // These need Lezer ambiguity markers (~label) to avoid reduce/reduce conflicts.
+  const conflictMarkers = new Map<string, string>();
+  {
+    // Group wrappers by parent rule, then by serialized inner content
+    const emptyMarkers = new Map<string, string>();
+    const serializeInner = (n: RuleNode) =>
+      serializeNode(n, tokenRules, keywords, definition.word, externalRules, '', emptyMarkers);
+    const parentGroups = new Map<string, Map<string, string[]>>();
+    for (const [wrapperType, def] of allWrapperDefs) {
+      const parentPascal = wrapperType.slice(0, wrapperType.indexOf('__'));
+      if (!parentGroups.has(parentPascal)) {
+        parentGroups.set(parentPascal, new Map());
+      }
+      const contentGroups = parentGroups.get(parentPascal)!;
+      const innerKey = [...new Set(def.innerNodes.map(serializeInner))].sort().join('|');
+      if (!contentGroups.has(innerKey)) {
+        contentGroups.set(innerKey, []);
+      }
+      contentGroups.get(innerKey)!.push(wrapperType);
+    }
+    let conflictCounter = 0;
+    for (const [, contentGroups] of parentGroups) {
+      for (const [, wrapperTypes] of contentGroups) {
+        if (wrapperTypes.length > 1) {
+          const marker = `fc${conflictCounter++}`;
+          for (const wt of wrapperTypes) {
+            conflictMarkers.set(wt, marker);
+          }
+        }
+      }
+    }
+  }
+
+  // Helper to serialize with parent context and conflict markers
+  const serialize = (ruleNode: RuleNode, parentPascal: string) =>
+    serializeNode(ruleNode, tokenRules, keywords, definition.word, externalRules, parentPascal, conflictMarkers);
+
   // @top rule
   const entryPascal = toPascalCase(definition.entry);
   const entryRule = rules[definition.entry]!;
-  sections.push(`@top ${entryPascal} { ${serializeNode(entryRule, tokenRules, keywords, definition.word, externalRules)} }`);
+  sections.push(`@top ${entryPascal} { ${serialize(entryRule, entryPascal)} }`);
   sections.push('');
 
   // Non-token, non-entry, non-external rules
@@ -682,7 +804,7 @@ export function generateLezerGrammar<T extends string>(
     if (externalRules.has(name)) continue;
 
     const pascalName = toPascalCase(name);
-    let body = serializeNode(ruleNode, tokenRules, keywords, definition.word, externalRules);
+    let body = serialize(ruleNode, pascalName);
 
     // For indent-based languages, allow Newline tokens between statements inside
     // Block rules. Without this, newlines after comments or blank lines inside
@@ -692,6 +814,18 @@ export function generateLezerGrammar<T extends string>(
     }
 
     sections.push(`${pascalName} { ${body} }`);
+    sections.push('');
+  }
+
+  // Emit wrapper rules for field() nodes
+  for (const [, wrapperDef] of allWrapperDefs) {
+    // Serialize each inner node and deduplicate
+    const serializedInners = new Set<string>();
+    for (const innerNode of wrapperDef.innerNodes) {
+      serializedInners.add(serialize(innerNode, wrapperDef.wrapperTypeName));
+    }
+    const body = [...serializedInners].join(' | ');
+    sections.push(`${wrapperDef.wrapperTypeName} { ${body} }`);
     sections.push('');
   }
 
