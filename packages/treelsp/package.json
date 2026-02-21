@@ -1,6 +1,6 @@
 {
   "name": "treelsp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A grammar-first LSP generator using Tree-sitter as the parsing backend",
   "type": "module",
   "main": "./dist/index.js",
