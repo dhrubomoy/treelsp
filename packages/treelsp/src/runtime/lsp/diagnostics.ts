@@ -135,7 +135,6 @@ function collectUnresolvedReferences(
     if (lsp?.$unresolved) {
       const ctx = {
         resolve: () => null,
-        typeOf: () => null,
         scopeOf: () => docScope.root,
         document: null,
         workspace: null,

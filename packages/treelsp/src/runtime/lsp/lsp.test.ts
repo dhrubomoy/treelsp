@@ -267,16 +267,7 @@ describe('LspContext', () => {
       expect(ctx.resolve(refNode)).toBe(declNode);
     });
 
-    it('should return null for typeOf (v2)', () => {
-      const node = createMockNode('identifier', 'x');
-      const globalScope = new Scope('global', null, null);
-      const docScope = createMockDocScope({ root: globalScope });
-      const document = createMockDocument(node);
-
-      const ctx = createLspContext(docScope, {} as unknown as Workspace, document, {});
-      expect(ctx.typeOf(node)).toBeNull();
-    });
-  });
+});
 });
 
 // ========== findNodeAtPosition Tests ==========

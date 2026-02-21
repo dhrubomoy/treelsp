@@ -97,6 +97,31 @@ Builder methods match Tree-sitter exactly:
 | `r.token(rule)` | `token(rule)` |
 | `r.rule(name)` | `$.rule_name` |
 
+### Top-Level Options
+
+Beyond `grammar`, `semantic`, `validation`, and `lsp`, `defineLanguage` accepts these options:
+
+| Option | Purpose |
+|--------|---------|
+| `word` | Token rule for keyword extraction. When set, string literals like `"let"` and `"if"` are treated as reserved keywords that won't match as identifiers. Should point to your identifier rule. |
+| `extras` | Tokens that can appear anywhere (typically whitespace and comments). Defaults to `[/\s/]`. |
+| `conflicts` | GLR conflict declarations for ambiguous grammars — needed when the parser can't decide between two rules without extra lookahead. |
+| `externals` | External scanner tokens for context-sensitive lexing (e.g., indent/dedent for Python-style languages). |
+
+```typescript
+export default defineLanguage({
+  name: 'MyLang',
+  fileExtensions: ['.mylang'],
+  entry: 'program',
+  word: 'identifier',
+  extras: r => [/\s/, r.rule('comment')],
+  conflicts: r => [[r.rule('expression'), r.rule('type_expression')]],
+  externals: r => [r.rule('indent'), r.rule('dedent'), r.rule('newline')],
+
+  grammar: { /* ... */ },
+});
+```
+
 ### Semantic Layer
 
 Three concepts drive all name resolution:
@@ -129,8 +154,12 @@ export default defineLanguage({
 | Path | Contents |
 |------|----------|
 | `treelsp` | `defineLanguage`, definition types, `defaults` |
-| `treelsp/runtime` | Runtime parser, scope resolution, LSP handlers |
-| `treelsp/codegen` | Code generation (used by `@treelsp/cli`) |
+| `treelsp/runtime` | Shared runtime interfaces (ASTNode, DocumentState, scope, LSP handlers) |
+| `treelsp/codegen` | Shared code generation (AST types, manifest, TextMate grammar) |
+| `treelsp/codegen/tree-sitter` | Tree-sitter grammar/highlights/locals codegen |
+| `treelsp/codegen/lezer` | Lezer grammar codegen |
+| `treelsp/backend/tree-sitter` | Tree-sitter runtime (parser, document state) |
+| `treelsp/backend/lezer` | Lezer runtime (parser, document state) |
 | `treelsp/server` | LSP stdio transport (used by generated servers) |
 
 ## License

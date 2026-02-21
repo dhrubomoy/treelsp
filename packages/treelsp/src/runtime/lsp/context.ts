@@ -26,10 +26,6 @@ export function createLspContext(
       return ref?.resolved?.node ?? null;
     },
 
-    typeOf(_node: ASTNode): any {
-      return null; // V2
-    },
-
     scopeOf(node: ASTNode): Scope {
       return findScopeForNode(node, docScope);
     },

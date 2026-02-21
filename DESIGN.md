@@ -1204,7 +1204,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [ ] **Zero CLI tests** — the user-facing entry point is untested
 - [ ] **Integration tests skip silently when WASM is absent** — CI may report all green while skipping the most important tests
 - [ ] **No codegen error-path tests** — empty grammar, missing entry, bad rule references
-- [ ] **No end-to-end pipeline test** — nothing tests `generate` → `build` → start server → send LSP requests
+- [x] **No end-to-end pipeline test** — fixed: `mini-lang/e2e.test.ts` spawns server.bundle.cjs over stdio and exercises initialize, didOpen, hover, definition, completion, symbols, semantic tokens, and incremental changes
 
 ### Package Hygiene
 
@@ -1214,8 +1214,8 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Documentation
 
-- [ ] **No JSDoc on `defineLanguage`** — the primary entry point has zero inline docs
-- [ ] **No JSDoc on semantic types** — `DeclarationDescriptor`, `ReferenceDescriptor`, scope kinds/targets have no inline documentation
-- [ ] **No JSDoc on LSP types** — `completionKind`, `SymbolDescriptor`, `SignatureDescriptor` undocumented
-- [ ] **`ctx.typeOf()` silently returns null** — exported in `LspContext` and `ValidationContext` but always returns `null`; should be documented or removed from v1 types
-- [ ] **README omits `extras`, `conflicts`, `word`** — important top-level config options not explained
+- [x] **No JSDoc on `defineLanguage`** — fixed: added full JSDoc with `@param` docs and usage example
+- [x] **No JSDoc on semantic types** — fixed: added rich JSDoc to `ScopeKind`, `ScopeTarget`, `Visibility`, `DeclareStrategy`, `DeclareOrder`, `UnresolvedPolicy`, `DeclarationDescriptor`, `ReferenceDescriptor` with examples
+- [x] **No JSDoc on LSP types** — fixed: added JSDoc to all LSP types: `CompletionKind`, `SymbolDescriptor`, `SignatureDescriptor`, `LspRule`, `LspContext`, `LspDefinition` with examples
+- [x] **`ctx.typeOf()` silently returns null** — fixed: removed from `LspContext` and `ValidationContext`; deferred to v2 type inference
+- [x] **README omits `extras`, `conflicts`, `word`** — fixed: added "Top-Level Options" section with `word`, `extras`, `conflicts`, `externals` table + example; updated exports table for backend-specific paths
