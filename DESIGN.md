@@ -1171,7 +1171,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 - [x] **Signature help defined but never wired** — fixed: `provideSignatureHelp` handler + `connection.onSignatureHelp` + trigger characters
 - [x] **`DiagnosticOptions.fix` is a dead end** — no code action provider, so validation fixes are never surfaced to the editor
 - [x] **`vscode-languageserver-textdocument` is an unused dependency** — removed
-- [ ] **Launch Extension not bringing correct LSP** all of the configs in launch.json brings up the LSP for lezer, not for treesitter.
+- [x] **Launch Extension not bringing correct LSP** all of the configs in launch.json brings up the LSP for lezer, not for treesitter.
 
 ### Missing Grammar Features — Blocks Real Languages
 
@@ -1203,7 +1203,7 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 - [x] **Zero CLI tests** — fixed: 18 tests covering config loading, validation (missing/empty/invalid fields), path resolution, and backend registry (tree-sitter, lezer, unknown, defaults)
 - [x] **Integration tests skip silently when WASM is absent** — fixed: `build-guard.test.ts` checks all 7 build artifacts exist and fails loudly if missing
-- [ ] **No codegen error-path tests** — empty grammar, missing entry, bad rule references
+- [x] **No codegen error-path tests** — fixed: 18 error-path tests covering entry/word validation (both backends), compile file-missing errors (grammar.js, grammar.lezer), Lezer compilation failure, and edge-case grammars through all shared codegen functions
 - [x] **No end-to-end pipeline test** — fixed: `mini-lang/e2e.test.ts` spawns server.bundle.cjs over stdio and exercises initialize, didOpen, hover, definition, completion, symbols, semantic tokens, and incremental changes
 
 ### Package Hygiene
