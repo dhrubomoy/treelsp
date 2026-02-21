@@ -1,5 +1,13 @@
 # @treelsp/cli
 
+## 0.0.3
+
+### Patch Changes
+
+- Release patch version
+- Updated dependencies
+  - treelsp@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes
