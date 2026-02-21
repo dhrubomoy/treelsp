@@ -2,6 +2,15 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
   release:
@@ -9,7 +18,6 @@ jobs:
 
     permissions:
       contents: write
-      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -24,20 +32,38 @@ jobs:
 
       - run: pnpm install
 
+      - name: Create changeset
+        run: |
+          cat > .changeset/release-bump.md << 'EOF'
+          ---
+          "treelsp": ${{ inputs.type }}
+          "@treelsp/cli": ${{ inputs.type }}
+          ---
+
+          Release ${{ inputs.type }} version
+          EOF
+
+      - name: Version packages
+        run: pnpm changeset version
+
       - run: pnpm build
 
       - run: pnpm lint
 
       - run: pnpm test
 
-      - name: Create release PR or publish
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release
-          version: pnpm changeset version
-          title: "chore: version packages"
-          commit: "chore: version packages"
+      - name: Commit version bumps
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: release ${{ inputs.type }} version"
+
+      - name: Publish to npm
+        run: pnpm changeset publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push changes and tags
+        run: git push --follow-tags
