@@ -20,7 +20,7 @@ Scaffold a new language project interactively.
 treelsp init
 ```
 
-Prompts for a language name and file extension, then creates a pnpm monorepo with two packages:
+Prompts for a language name, file extension, and parser backend (Tree-sitter or Lezer), then creates a pnpm monorepo with two packages:
 - `packages/language/` — grammar definition (`grammar.ts`) and generated files
 - `packages/extension/` — VS Code extension that launches the language server
 

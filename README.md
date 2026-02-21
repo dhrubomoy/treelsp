@@ -80,7 +80,7 @@ The Tree-sitter backend also generates `.scm` query files for native syntax high
 ## Getting Started
 
 ```bash
-treelsp init           # scaffold a new language project (two-package monorepo)
+treelsp init           # prompts for name, file extension, and parser backend
 cd my-lang
 pnpm install
 pnpm build             # generate + compile + bundle server

@@ -51,15 +51,25 @@ export async function init() {
         return true;
       },
     },
-  ]) as { name?: string; extension?: string };
+    {
+      type: 'select',
+      name: 'backend',
+      message: 'Parser backend:',
+      choices: [
+        { title: 'Tree-sitter', description: 'Default — generates WASM parser, requires tree-sitter CLI', value: 'tree-sitter' },
+        { title: 'Lezer', description: 'Pure JavaScript — no external CLI required', value: 'lezer' },
+      ],
+      initial: 0,
+    },
+  ]) as { name?: string; extension?: string; backend?: string };
 
   // Handle user cancellation (Ctrl+C)
-  if (!answers.name || !answers.extension) {
+  if (!answers.name || !answers.extension || !answers.backend) {
     console.log(pc.dim('\nCancelled'));
     process.exit(0);
   }
 
-  const { name, extension } = answers as { name: string; extension: string };
+  const { name, extension, backend } = answers as { name: string; extension: string; backend: string };
 
   const capitalizedName = name
     .split('-')
@@ -93,9 +103,9 @@ export async function init() {
       // Root files
       ['pnpm-workspace.yaml', pnpmWorkspaceYaml()],
       ['package.json', rootPackageJson(name, versionRange)],
-      ['treelsp-config.json', treelspConfigJson()],
+      ['treelsp-config.json', treelspConfigJson(backend)],
       ['.gitignore', rootGitignore()],
-      ['README.md', rootReadme(capitalizedName)],
+      ['README.md', rootReadme(capitalizedName, backend)],
       ['.vscode/launch.json', vscodeLaunchJson()],
       ['.vscode/tasks.json', vscodeTasksJson()],
       // Language package
@@ -162,12 +172,12 @@ function rootPackageJson(name: string, versionRange: string): string {
   return JSON.stringify(pkg, null, 2) + '\n';
 }
 
-function treelspConfigJson(): string {
-  const config = {
-    languages: [
-      { grammar: 'packages/language/grammar.ts' },
-    ],
-  };
+function treelspConfigJson(backend: string): string {
+  const entry: Record<string, string> = { grammar: 'packages/language/grammar.ts' };
+  if (backend !== 'tree-sitter') {
+    entry['backend'] = backend;
+  }
+  const config = { languages: [entry] };
   return JSON.stringify(config, null, 2) + '\n';
 }
 
@@ -183,10 +193,11 @@ generated-lezer/
 `;
 }
 
-function rootReadme(capitalizedName: string): string {
+function rootReadme(capitalizedName: string, backend: string): string {
+  const generatedDir = backend === 'lezer' ? 'generated-lezer' : 'generated';
   return `# ${capitalizedName}
 
-A language powered by [treelsp](https://github.com/dhrubomoy/treelsp).
+A language powered by [treelsp](https://github.com/dhrubomoy/treelsp) using the ${backend} parser backend.
 
 ## Getting Started
 
@@ -218,7 +229,7 @@ pnpm watch     # Auto-rebuild grammar on changes
 ## Project Structure
 
 - \`packages/language/grammar.ts\` - Language definition (grammar, semantics, validation, LSP)
-- \`packages/language/generated/\` - Generated files (parser, AST types, server bundle)
+- \`packages/language/${generatedDir}/\` - Generated files (parser, AST types, server bundle)
 - \`packages/extension/\` - VS Code extension that launches the language server
 
 ## License
