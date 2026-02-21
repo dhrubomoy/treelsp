@@ -1182,10 +1182,10 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Missing LSP Features
 
-- [ ] **No formatting** (`textDocument/formatting`)
-- [ ] **No code actions** (`textDocument/codeAction`) — even though validation defines `fix`
-- [ ] **No folding ranges** (`textDocument/foldingRange`)
-- [ ] **No workspace symbols** (`workspace/symbol`) — "Go to Symbol in Workspace" doesn't work
+- [x] **No formatting** (`textDocument/formatting`) — fixed: `$format` handler on `LspDefinition` delegates to user-defined formatter; capability only advertised when formatter is present
+- [x] **No code actions** (`textDocument/codeAction`) — already implemented: `codeActionProvider` capability, handler wired, diagnostic fixes flow through validation `fix` field
+- [x] **No folding ranges** (`textDocument/foldingRange`) — fixed: auto-detects foldable regions from AST; `foldable` property on `LspRule` controls fold kind (`'comment'`, `'imports'`, `'region'`)
+- [x] **No workspace symbols** (`workspace/symbol`) — fixed: searches all open documents for declarations with symbol descriptors, filters by query
 - [x] **No completion trigger characters** — fixed: `completionTrigger` on `LspRule` collects per-rule triggers into `completionProvider.triggerCharacters`
 - [x] **No signature help handler** — fixed: handler + trigger characters from lsp config
 - [x] **No `semanticToken` customization** — fixed: `semanticToken` property on `LspRule` supports string shorthand or `{ type, modifiers }` object form

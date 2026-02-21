@@ -207,6 +207,16 @@ export interface LspRule {
   signature?: SignatureDescriptor;
   /** Override semantic token classification for this rule */
   semanticToken?: SemanticTokenType | SemanticTokenDescriptor;
+  /**
+   * Mark this rule as foldable in the editor.
+   * - `true` — foldable region (default kind)
+   * - `'comment'` — fold as comment block
+   * - `'imports'` — fold as import group
+   * - `'region'` — fold as explicit region
+   *
+   * Only nodes spanning 2+ lines produce fold ranges.
+   */
+  foldable?: boolean | 'comment' | 'imports' | 'region';
 }
 
 /**
@@ -220,15 +230,42 @@ export interface KeywordDescriptor {
 }
 
 /**
+ * A text edit returned by the `$format` handler.
+ */
+export interface FormattingEdit {
+  range: { start: { line: number; character: number }; end: { line: number; character: number } };
+  newText: string;
+}
+
+/**
  * Maps grammar rule names to their editor features (hover, completion, symbols, etc.).
  *
  * Special keys:
  * - `$keywords` — Metadata for keyword completions (extracted from string literals in the grammar)
  * - `$unresolved` — Custom error message when a reference cannot be resolved
+ * - `$format` — Custom document formatter
  */
 export type LspDefinition<T extends string = string> = {
   [K in T]?: LspRule;
 } & {
   $keywords?: Record<string, KeywordDescriptor>;
   $unresolved?: (node: any, ctx: LspContext) => string;
+  /**
+   * Custom document formatter. Called on `textDocument/formatting`.
+   * Return an array of text edits to apply, or an empty array to skip.
+   *
+   * @param text - The full document text
+   * @param node - The root AST node
+   * @param options - Formatting options (tab size, spaces vs tabs)
+   *
+   * @example
+   * ```ts
+   * $format: (text, node, options) => {
+   *   const indent = options.insertSpaces ? ' '.repeat(options.tabSize) : '\t';
+   *   // ... compute edits
+   *   return [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: '' }];
+   * }
+   * ```
+   */
+  $format?: (text: string, node: any, options: { tabSize: number; insertSpaces: boolean }) => FormattingEdit[];
 };

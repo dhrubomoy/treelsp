@@ -29,6 +29,9 @@ import { prepareRename, provideRename } from './rename.js';
 import { provideSymbols } from './symbols.js';
 import { provideSignatureHelp, getSignatureTriggerCharacters } from './signature-help.js';
 import { provideCodeActions } from './code-actions.js';
+import { provideFoldingRanges } from './folding-ranges.js';
+import { provideWorkspaceSymbols } from './workspace-symbols.js';
+import { provideDocumentFormatting } from './formatting.js';
 import { DocumentManager } from './documents.js';
 import { createServer } from './server.js';
 import type { LanguageDefinition } from '../../definition/index.js';
@@ -2730,5 +2733,298 @@ describe('computeDiagnostics — fix preservation', () => {
     expect(diag?.fix?.label).toBe('Fix bad node');
     expect(diag?.fix?.edits).toHaveLength(1);
     expect(diag?.fix?.edits[0]!.newText).toBe('y');
+  });
+});
+
+// ========== Folding Ranges Tests ==========
+
+describe('provideFoldingRanges', () => {
+  it('returns fold range for multi-line node with LspRule', () => {
+    const bodyNode = createMockNode('function_def', 'fn foo() {\n  x\n}', {
+      startLine: 0, startChar: 0, endLine: 2, endChar: 1,
+      isNamed: true,
+    });
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(bodyNode as any)._syntaxNode],
+    });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {
+      function_def: { symbol: { kind: 'Function', label: 'foo' } },
+    };
+
+    const ranges = provideFoldingRanges(document, lsp);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]!.startLine).toBe(0);
+    expect(ranges[0]!.endLine).toBe(2);
+  });
+
+  it('skips single-line nodes', () => {
+    const node = createMockNode('variable_decl', 'let x = 1;', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 10,
+      isNamed: true,
+    });
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {
+      variable_decl: { completionKind: 'Variable' },
+    };
+
+    const ranges = provideFoldingRanges(document, lsp);
+    expect(ranges).toHaveLength(0);
+  });
+
+  it('skips nodes without LspRule', () => {
+    const node = createMockNode('expression', 'a +\nb', {
+      startLine: 0, startChar: 0, endLine: 1, endChar: 1,
+      isNamed: true,
+    });
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {};
+
+    const ranges = provideFoldingRanges(document, lsp);
+    expect(ranges).toHaveLength(0);
+  });
+
+  it('uses foldable kind when set to string', () => {
+    const node = createMockNode('comment', '// line1\n// line2', {
+      startLine: 0, startChar: 0, endLine: 1, endChar: 8,
+      isNamed: true,
+    });
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {
+      comment: { foldable: 'comment' },
+    };
+
+    const ranges = provideFoldingRanges(document, lsp);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]!.kind).toBe('comment');
+  });
+
+  it('returns no kind when foldable is true', () => {
+    const node = createMockNode('block', '{\n  x\n}', {
+      startLine: 0, startChar: 0, endLine: 2, endChar: 1,
+      isNamed: true,
+    });
+    const rootNode = createMockNode('program', '', {
+      namedChildren: [(node as any)._syntaxNode],
+    });
+    const document = createMockDocument(rootNode);
+
+    const lsp: LspDefinition = {
+      block: { foldable: true },
+    };
+
+    const ranges = provideFoldingRanges(document, lsp);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]!.kind).toBeUndefined();
+  });
+
+  it('returns empty without LSP config', () => {
+    const rootNode = createMockNode('program', '');
+    const document = createMockDocument(rootNode);
+
+    const ranges = provideFoldingRanges(document);
+    expect(ranges).toHaveLength(0);
+  });
+});
+
+// ========== Workspace Symbols Tests ==========
+
+describe('provideWorkspaceSymbols', () => {
+  it('returns symbols matching query from declarations', () => {
+    const nameNode1 = createMockNode('identifier', 'myVar', {
+      startLine: 0, startChar: 4, endLine: 0, endChar: 9,
+    });
+    const varDeclNode = createMockNode('variable_decl', 'let myVar = 1', {
+      startLine: 0, startChar: 0, endLine: 0, endChar: 13,
+    });
+    (nameNode1 as any)._syntaxNode.parent = (varDeclNode as any)._syntaxNode;
+
+    const nameNode2 = createMockNode('identifier', 'otherVar', {
+      startLine: 1, startChar: 4, endLine: 1, endChar: 12,
+    });
+
+    const decl1: Declaration = {
+      node: nameNode1, name: 'myVar', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    const decl2: Declaration = {
+      node: nameNode2, name: 'otherVar', visibility: 'private', declaredBy: 'variable_decl',
+    };
+
+    const lsp: LspDefinition = {
+      variable_decl: { symbol: { kind: 'Variable', label: 'Variable' } },
+    };
+
+    // Build a mock DocumentManager with pre-built workspace documents
+    const semantic: SemanticDefinition = {};
+    const docs = new DocumentManager(semantic);
+
+    // Manually add documents via workspace
+    const rootNode = createMockNode('program', '');
+    const doc1 = createMockDocument(rootNode, 'file:///a.ml');
+    const doc2 = createMockDocument(rootNode, 'file:///b.ml');
+
+    // Open docs to register them, then inject declarations
+    docs.open(doc1);
+    docs.open(doc2);
+
+    const wsDoc1 = docs.get('file:///a.ml');
+    const wsDoc2 = docs.get('file:///b.ml');
+    wsDoc1!.scope.declarations.push(decl1);
+    wsDoc2!.scope.declarations.push(decl2);
+
+    // Query "my" should match only decl1 (name='myVar' contains 'my')
+    const symbols = provideWorkspaceSymbols('my', docs, lsp);
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]!.name).toBe('Variable'); // static label from symbol descriptor
+    expect(symbols[0]!.kind).toBe('Variable');
+    expect(symbols[0]!.location.uri).toBe('file:///a.ml');
+  });
+
+  it('returns all symbols for empty query', () => {
+    const lsp: LspDefinition = {
+      variable_decl: { symbol: { kind: 'Variable', label: 'var' } },
+    };
+    const semantic: SemanticDefinition = {};
+    const docs = new DocumentManager(semantic);
+
+    const rootNode = createMockNode('program', '');
+    const doc = createMockDocument(rootNode);
+    docs.open(doc);
+
+    const nameNode = createMockNode('identifier', 'x');
+    const decl: Declaration = {
+      node: nameNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    docs.get(doc.uri)!.scope.declarations.push(decl);
+
+    const symbols = provideWorkspaceSymbols('', docs, lsp);
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]!.name).toBe('var'); // uses string label
+  });
+
+  it('skips declarations without symbol descriptor', () => {
+    const lsp: LspDefinition = {};
+    const semantic: SemanticDefinition = {};
+    const docs = new DocumentManager(semantic);
+
+    const rootNode = createMockNode('program', '');
+    const doc = createMockDocument(rootNode);
+    docs.open(doc);
+
+    const nameNode = createMockNode('identifier', 'x');
+    const decl: Declaration = {
+      node: nameNode, name: 'x', visibility: 'private', declaredBy: 'variable_decl',
+    };
+    docs.get(doc.uri)!.scope.declarations.push(decl);
+
+    const symbols = provideWorkspaceSymbols('x', docs, lsp);
+    expect(symbols).toHaveLength(0);
+  });
+
+  it('returns empty without LSP config', () => {
+    const semantic: SemanticDefinition = {};
+    const docs = new DocumentManager(semantic);
+    const symbols = provideWorkspaceSymbols('test', docs);
+    expect(symbols).toHaveLength(0);
+  });
+});
+
+// ========== Formatting Tests ==========
+
+describe('provideDocumentFormatting', () => {
+  it('calls $format handler and returns edits', () => {
+    const rootNode = createMockNode('program', '  x');
+    const document = createMockDocument(rootNode);
+
+    const lsp = {
+      $format: (_text: string, _node: any, _options: { tabSize: number; insertSpaces: boolean }) => [{
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 2 } },
+        newText: '',
+      }],
+    } as LspDefinition;
+
+    const edits = provideDocumentFormatting(document, { tabSize: 2, insertSpaces: true }, lsp);
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.newText).toBe('');
+  });
+
+  it('passes correct arguments to $format', () => {
+    const rootNode = createMockNode('program', 'hello');
+    const document = createMockDocument(rootNode);
+
+    let receivedText: string | undefined;
+    let receivedOptions: { tabSize: number; insertSpaces: boolean } | undefined;
+
+    const lsp = {
+      $format: (text: string, _node: any, options: { tabSize: number; insertSpaces: boolean }) => {
+        receivedText = text;
+        receivedOptions = options;
+        return [];
+      },
+    } as LspDefinition;
+
+    provideDocumentFormatting(document, { tabSize: 4, insertSpaces: false }, lsp);
+    expect(receivedText).toBe('hello');
+    expect(receivedOptions).toEqual({ tabSize: 4, insertSpaces: false });
+  });
+
+  it('returns empty without $format handler', () => {
+    const rootNode = createMockNode('program', 'x');
+    const document = createMockDocument(rootNode);
+
+    const edits = provideDocumentFormatting(document, { tabSize: 2, insertSpaces: true }, {});
+    expect(edits).toHaveLength(0);
+  });
+
+  it('returns empty without LSP config', () => {
+    const rootNode = createMockNode('program', 'x');
+    const document = createMockDocument(rootNode);
+
+    const edits = provideDocumentFormatting(document, { tabSize: 2, insertSpaces: true });
+    expect(edits).toHaveLength(0);
+  });
+});
+
+// ========== createServer — new features ==========
+
+describe('createServer — new features', () => {
+  it('exposes provideFoldingRanges', () => {
+    const server = createServer(createMockLanguageDef());
+    expect(typeof server.provideFoldingRanges).toBe('function');
+  });
+
+  it('exposes provideWorkspaceSymbols', () => {
+    const server = createServer(createMockLanguageDef());
+    expect(typeof server.provideWorkspaceSymbols).toBe('function');
+  });
+
+  it('exposes provideDocumentFormatting', () => {
+    const server = createServer(createMockLanguageDef());
+    expect(typeof server.provideDocumentFormatting).toBe('function');
+  });
+
+  it('hasFormatter is false without $format', () => {
+    const server = createServer(createMockLanguageDef());
+    expect(server.hasFormatter).toBe(false);
+  });
+
+  it('hasFormatter is true with $format', () => {
+    const server = createServer(createMockLanguageDef({
+      lsp: { $format: () => [] } as LspDefinition,
+    }));
+    expect(server.hasFormatter).toBe(true);
   });
 });

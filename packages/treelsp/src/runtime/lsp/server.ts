@@ -17,7 +17,10 @@ import { provideSymbols, type DocumentSymbol } from './symbols.js';
 import { provideSemanticTokensFull, type SemanticTokensResult } from './semantic-tokens.js';
 import { provideSignatureHelp, getSignatureTriggerCharacters, type SignatureHelpResult } from './signature-help.js';
 import { provideCodeActions, type CodeAction } from './code-actions.js';
-import type { CompletionItem } from '../../definition/lsp.js';
+import { provideFoldingRanges, type FoldingRange } from './folding-ranges.js';
+import { provideWorkspaceSymbols, type WorkspaceSymbol } from './workspace-symbols.js';
+import { provideDocumentFormatting, type FormattingOptions } from './formatting.js';
+import type { CompletionItem, FormattingEdit } from '../../definition/lsp.js';
 
 /**
  * Language service — provides all LSP handler methods
@@ -62,6 +65,18 @@ export interface LanguageService {
 
   /** Code actions (quick fixes from diagnostics) */
   provideCodeActions(document: DocumentState, range: { start: Position; end: Position }): CodeAction[];
+
+  /** Folding ranges */
+  provideFoldingRanges(document: DocumentState): FoldingRange[];
+
+  /** Workspace symbols (search across all open documents) */
+  provideWorkspaceSymbols(query: string): WorkspaceSymbol[];
+
+  /** Document formatting */
+  provideDocumentFormatting(document: DocumentState, options: FormattingOptions): FormattingEdit[];
+
+  /** Whether the language definition has a custom formatter */
+  hasFormatter: boolean;
 
   /** Signature help trigger characters (from lsp config) */
   signatureTriggerCharacters: string[];
@@ -166,6 +181,20 @@ export function createServer(definition: LanguageDefinition): LanguageService {
       const diagnostics = this.computeDiagnostics(document);
       return provideCodeActions(diagnostics, range, document.uri);
     },
+
+    provideFoldingRanges(document: DocumentState): FoldingRange[] {
+      return provideFoldingRanges(document, lsp);
+    },
+
+    provideWorkspaceSymbols(query: string): WorkspaceSymbol[] {
+      return provideWorkspaceSymbols(query, documents, lsp);
+    },
+
+    provideDocumentFormatting(document: DocumentState, options: FormattingOptions): FormattingEdit[] {
+      return provideDocumentFormatting(document, options, lsp);
+    },
+
+    hasFormatter: !!lsp?.$format,
 
     signatureTriggerCharacters: triggerChars,
     completionTriggerCharacters: completionTriggers,

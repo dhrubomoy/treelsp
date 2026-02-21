@@ -196,6 +196,9 @@ export function startStdioServer(options: StdioServerOptions): void {
       codeActionProvider: { codeActionKinds: ['quickfix'] },
       renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
+      foldingRangeProvider: true,
+      workspaceSymbolProvider: true,
+      ...(service.hasFormatter ? { documentFormattingProvider: true } : {}),
       semanticTokensProvider: {
         legend: {
           tokenTypes: [...SEMANTIC_TOKEN_TYPES],
@@ -437,6 +440,50 @@ export function startStdioServer(options: StdioServerOptions): void {
     } catch (e) {
       connection.console.error(`[semanticTokens] error: ${String(e)}`);
       return { data: [] };
+    }
+  });
+
+  // Folding ranges
+  connection.onFoldingRanges((params) => {
+    try {
+      const state = documentStates.get(params.textDocument.uri);
+      if (!state) return [];
+      const ranges = service.provideFoldingRanges(state);
+      return ranges.map(r => ({
+        startLine: r.startLine,
+        endLine: r.endLine,
+        ...(r.kind ? { kind: r.kind } : {}),
+      }));
+    } catch (e) {
+      connection.console.error(`[foldingRanges] error: ${String(e)}`);
+      return [];
+    }
+  });
+
+  // Workspace symbols
+  connection.onWorkspaceSymbol((params) => {
+    try {
+      const symbols = service.provideWorkspaceSymbols(params.query);
+      return symbols.map(s => ({
+        name: s.name,
+        kind: s.kindNumber as LspSymbolKind,
+        location: s.location,
+      }));
+    } catch (e) {
+      connection.console.error(`[workspaceSymbol] error: ${String(e)}`);
+      return [];
+    }
+  });
+
+  // Document formatting
+  connection.onDocumentFormatting((params) => {
+    try {
+      const state = documentStates.get(params.textDocument.uri);
+      if (!state) return [];
+      return service.provideDocumentFormatting(state, params.options);
+    } catch (e) {
+      connection.console.error(`[formatting] error: ${String(e)}`);
+      return [];
     }
   });
 

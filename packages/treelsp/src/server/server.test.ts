@@ -21,6 +21,9 @@ const mockConnection = {
   onPrepareRename: vi.fn(),
   onRenameRequest: vi.fn(),
   onDocumentSymbol: vi.fn(),
+  onFoldingRanges: vi.fn(),
+  onWorkspaceSymbol: vi.fn(),
+  onDocumentFormatting: vi.fn(),
   sendDiagnostics: vi.fn(),
   listen: vi.fn(),
   console: { log: vi.fn(), error: vi.fn() },
@@ -88,6 +91,8 @@ describe('startStdioServer', () => {
     expect(result.capabilities.renameProvider).toEqual({ prepareProvider: true });
     expect(result.capabilities.documentSymbolProvider).toBe(true);
     expect(result.capabilities.completionProvider).toEqual({ resolveProvider: false });
+    expect(result.capabilities.foldingRangeProvider).toBe(true);
+    expect(result.capabilities.workspaceSymbolProvider).toBe(true);
     expect(result.capabilities.semanticTokensProvider).toBeDefined();
   });
 
@@ -101,6 +106,9 @@ describe('startStdioServer', () => {
     expect(mockConnection.onPrepareRename).toHaveBeenCalledOnce();
     expect(mockConnection.onRenameRequest).toHaveBeenCalledOnce();
     expect(mockConnection.onDocumentSymbol).toHaveBeenCalledOnce();
+    expect(mockConnection.onFoldingRanges).toHaveBeenCalledOnce();
+    expect(mockConnection.onWorkspaceSymbol).toHaveBeenCalledOnce();
+    expect(mockConnection.onDocumentFormatting).toHaveBeenCalledOnce();
   });
 
   it('registers document lifecycle handlers on connection', async () => {
