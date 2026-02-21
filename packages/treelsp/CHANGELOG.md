@@ -1,5 +1,11 @@
 # treelsp
 
+## 0.0.4
+
+### Patch Changes
+
+- Release patch version
+
 ## 0.0.3
 
 ### Patch Changes
