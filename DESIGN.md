@@ -1158,12 +1158,11 @@ This section tells Claude Code what is settled and what still needs discussion.
 
 ---
 ## TODO:
-- [x] Update readme with the latest info, especially that this tries to be a parser agnostic tool. Add commands to generate treesitter and lezer.
-- [x] `treelsp init` should ask user for which parser they want to use, and scaffold project based on that. Update readme.
-- [x] `treelsp init` should create two packages. One called language which will have the grammar.ts and all the generated files. Another package is called "extension" which will have all the code necessary to run a vscode extension.
+- [ ] Readme should include instruction to install treelsp/cli first before running treelsp init to scaffold project
+- [ ] I tried using treelsp v0.0.4. Scaffolded a project in path `~/git/lsp-projects/treelsp-sql`. Syntax highlighting is not working when I launch vscode extension. variable name, number works. But keyword does not.
 
 ## Design question:
-- For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
+- [ ] For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern, which can be error prone? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
 
 ## Production Readiness
 
