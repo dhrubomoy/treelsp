@@ -1201,8 +1201,8 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Testing Gaps
 
-- [ ] **Zero CLI tests** — the user-facing entry point is untested
-- [ ] **Integration tests skip silently when WASM is absent** — CI may report all green while skipping the most important tests
+- [x] **Zero CLI tests** — fixed: 18 tests covering config loading, validation (missing/empty/invalid fields), path resolution, and backend registry (tree-sitter, lezer, unknown, defaults)
+- [x] **Integration tests skip silently when WASM is absent** — fixed: `build-guard.test.ts` checks all 7 build artifacts exist and fails loudly if missing
 - [ ] **No codegen error-path tests** — empty grammar, missing entry, bad rule references
 - [x] **No end-to-end pipeline test** — fixed: `mini-lang/e2e.test.ts` spawns server.bundle.cjs over stdio and exercises initialize, didOpen, hover, definition, completion, symbols, semantic tokens, and incremental changes
 
