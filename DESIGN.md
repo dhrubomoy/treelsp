@@ -1158,7 +1158,8 @@ This section tells Claude Code what is settled and what still needs discussion.
 
 ---
 ## TODO:
-- [ ] Update readme with the latest info, especially that this tries to be a parser agnostic tool. Add commands to generate treesitter and lezer.
+- [x] Update readme with the latest info, especially that this tries to be a parser agnostic tool. Add commands to generate treesitter and lezer.
+- [ ] `treelsp init` should ask user for which parser they want to use, and scaffold project based on that.
 - [x] `treelsp init` should create two packages. One called language which will have the grammar.ts and all the generated files. Another package is called "extension" which will have all the code necessary to run a vscode extension.
 
 ## Design question:
