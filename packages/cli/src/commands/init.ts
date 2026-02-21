@@ -1,5 +1,9 @@
 /**
- * Init command - scaffold a new language project
+ * Init command - scaffold a new two-package language project
+ *
+ * Creates a pnpm monorepo with:
+ * - packages/language/ — grammar definition + generated files
+ * - packages/extension/ — VS Code extension that launches the language server
  */
 
 import prompts from 'prompts';
@@ -47,15 +51,32 @@ export async function init() {
         return true;
       },
     },
-  ]) as { name?: string; extension?: string };
+    {
+      type: 'select',
+      name: 'backend',
+      message: 'Parser backend:',
+      choices: [
+        { title: 'Tree-sitter', description: 'Default — generates WASM parser, requires tree-sitter CLI', value: 'tree-sitter' },
+        { title: 'Lezer', description: 'Pure JavaScript — no external CLI required', value: 'lezer' },
+      ],
+      initial: 0,
+    },
+  ]) as { name?: string; extension?: string; backend?: string };
 
   // Handle user cancellation (Ctrl+C)
-  if (!answers.name || !answers.extension) {
+  if (!answers.name || !answers.extension || !answers.backend) {
     console.log(pc.dim('\nCancelled'));
     process.exit(0);
   }
 
-  const { name, extension } = answers as { name: string; extension: string };
+  const { name, extension, backend } = answers as { name: string; extension: string; backend: string };
+
+  const capitalizedName = name
+    .split('-')
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+
+  const languageId = name.replace(/-/g, '').toLowerCase();
 
   const spinner = ora('Creating project structure...').start();
 
@@ -69,61 +90,224 @@ export async function init() {
       process.exit(1);
     }
 
-    // Create project directory
-    await mkdir(projectDir);
+    // Create all directories
+    await mkdir(resolve(projectDir, '.vscode'), { recursive: true });
+    await mkdir(resolve(projectDir, 'packages', 'language'), { recursive: true });
+    await mkdir(resolve(projectDir, 'packages', 'extension', 'src'), { recursive: true });
 
-    // Generate package.json
     const version = await getCliVersion();
     const versionRange = `^${version}`;
-    const packageJson = {
-      name: name,
-      version: '0.1.0',
-      type: 'module',
-      dependencies: {
-        treelsp: versionRange,
+
+    // Write all files
+    const files: Array<[string, string]> = [
+      // Root files
+      ['pnpm-workspace.yaml', pnpmWorkspaceYaml()],
+      ['package.json', rootPackageJson(name, versionRange)],
+      ['treelsp-config.json', treelspConfigJson(backend)],
+      ['.gitignore', rootGitignore()],
+      ['README.md', rootReadme(capitalizedName, backend)],
+      ['.vscode/launch.json', vscodeLaunchJson()],
+      ['.vscode/tasks.json', vscodeTasksJson()],
+      // Language package
+      ['packages/language/package.json', languagePackageJson(name, versionRange)],
+      ['packages/language/tsconfig.json', languageTsconfig()],
+      ['packages/language/grammar.ts', grammarTemplate(capitalizedName, extension)],
+      // Extension package
+      ['packages/extension/package.json', extensionPackageJson(name, capitalizedName, languageId, extension)],
+      ['packages/extension/tsconfig.json', extensionTsconfig()],
+      ['packages/extension/tsdown.config.ts', extensionTsdownConfig()],
+      ['packages/extension/.vscodeignore', extensionVscodeignore()],
+      ['packages/extension/src/extension.ts', extensionTs(capitalizedName, languageId)],
+    ];
+
+    for (const [filePath, content] of files) {
+      await writeFile(resolve(projectDir, filePath), content, 'utf-8');
+    }
+
+    spinner.succeed('Project created!');
+
+    console.log(pc.dim('\nNext steps:'));
+    console.log(pc.dim(`  cd ${name}`));
+    console.log(pc.dim('  pnpm install'));
+    console.log(pc.dim('  Edit packages/language/grammar.ts to define your language'));
+    console.log(pc.dim('  pnpm build'));
+    console.log(pc.dim('  Press F5 in VS Code to launch the extension'));
+
+  } catch (error) {
+    spinner.fail('Failed to create project');
+
+    if (error instanceof Error) {
+      console.error(pc.red(`\n${error.message}`));
+    }
+
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Template functions
+// ---------------------------------------------------------------------------
+
+function pnpmWorkspaceYaml(): string {
+  return `packages:\n  - 'packages/*'\n`;
+}
+
+function rootPackageJson(name: string, versionRange: string): string {
+  const pkg = {
+    name,
+    version: '0.1.0',
+    private: true,
+    type: 'module',
+    scripts: {
+      generate: 'treelsp generate',
+      build: 'treelsp generate && treelsp build',
+      'build:extension': `pnpm --filter ${name}-extension build`,
+      watch: 'treelsp watch',
+    },
+    devDependencies: {
+      '@treelsp/cli': versionRange,
+      typescript: '^5.7.3',
+    },
+  };
+  return JSON.stringify(pkg, null, 2) + '\n';
+}
+
+function treelspConfigJson(backend: string): string {
+  const entry: Record<string, string> = { grammar: 'packages/language/grammar.ts' };
+  if (backend !== 'tree-sitter') {
+    entry['backend'] = backend;
+  }
+  const config = { languages: [entry] };
+  return JSON.stringify(config, null, 2) + '\n';
+}
+
+function rootGitignore(): string {
+  return `node_modules
+dist
+generated/
+generated-lezer/
+*.wasm
+*.log
+*.tsbuildinfo
+.DS_Store
+`;
+}
+
+function rootReadme(capitalizedName: string, backend: string): string {
+  const generatedDir = backend === 'lezer' ? 'generated-lezer' : 'generated';
+  return `# ${capitalizedName}
+
+A language powered by [treelsp](https://github.com/dhrubomoy/treelsp) using the ${backend} parser backend.
+
+## Getting Started
+
+Install dependencies:
+
+\`\`\`bash
+pnpm install
+\`\`\`
+
+Generate grammar and build parser:
+
+\`\`\`bash
+pnpm build
+\`\`\`
+
+Launch the VS Code extension for development:
+
+\`\`\`
+Press F5 in VS Code, or:
+pnpm build:extension
+\`\`\`
+
+Development workflow:
+
+\`\`\`bash
+pnpm watch     # Auto-rebuild grammar on changes
+\`\`\`
+
+## Project Structure
+
+- \`packages/language/grammar.ts\` - Language definition (grammar, semantics, validation, LSP)
+- \`packages/language/${generatedDir}/\` - Generated files (parser, AST types, server bundle)
+- \`packages/extension/\` - VS Code extension that launches the language server
+
+## License
+
+MIT
+`;
+}
+
+function vscodeLaunchJson(): string {
+  const config = {
+    version: '0.2.0',
+    configurations: [
+      {
+        name: 'Launch Extension',
+        type: 'extensionHost',
+        request: 'launch',
+        args: [
+          '--extensionDevelopmentPath=${workspaceFolder}/packages/extension',
+          '${workspaceFolder}/packages/language',
+        ],
+        outFiles: [
+          '${workspaceFolder}/packages/extension/dist/**/*.js',
+        ],
+        preLaunchTask: 'build',
       },
-      devDependencies: {
-        '@treelsp/cli': versionRange,
-        typescript: '^5.7.3',
+    ],
+  };
+  return JSON.stringify(config, null, 2) + '\n';
+}
+
+function vscodeTasksJson(): string {
+  const config = {
+    version: '2.0.0',
+    tasks: [
+      {
+        label: 'build',
+        type: 'shell',
+        command: 'pnpm build && pnpm build:extension',
+        group: 'build',
+        problemMatcher: [] as string[],
       },
-      scripts: {
-        generate: 'treelsp generate',
-        build: 'treelsp build',
-        watch: 'treelsp watch',
-      },
-    };
+    ],
+  };
+  return JSON.stringify(config, null, 2) + '\n';
+}
 
-    await writeFile(
-      resolve(projectDir, 'package.json'),
-      JSON.stringify(packageJson, null, 2) + '\n',
-      'utf-8'
-    );
+function languagePackageJson(name: string, versionRange: string): string {
+  const pkg = {
+    name: `${name}-language`,
+    version: '0.1.0',
+    private: true,
+    type: 'module',
+    dependencies: {
+      treelsp: versionRange,
+    },
+    devDependencies: {
+      typescript: '^5.7.3',
+    },
+  };
+  return JSON.stringify(pkg, null, 2) + '\n';
+}
 
-    // Generate tsconfig.json
-    const tsconfig = {
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
-        strict: true,
-        outDir: './dist',
-      },
-      include: ['grammar.ts'],
-    };
+function languageTsconfig(): string {
+  const config = {
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      strict: true,
+      outDir: './dist',
+    },
+    include: ['grammar.ts'],
+  };
+  return JSON.stringify(config, null, 2) + '\n';
+}
 
-    await writeFile(
-      resolve(projectDir, 'tsconfig.json'),
-      JSON.stringify(tsconfig, null, 2) + '\n',
-      'utf-8'
-    );
-
-    // Generate grammar.ts template
-    const capitalizedName = name
-      .split('-')
-      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
-
-    const grammarTemplate = `/**
+function grammarTemplate(capitalizedName: string, extension: string): string {
+  return `/**
  * ${capitalizedName} - Language definition for treelsp
  */
 
@@ -218,94 +402,247 @@ export default defineLanguage({
   },
 });
 `;
+}
 
-    await writeFile(
-      resolve(projectDir, 'grammar.ts'),
-      grammarTemplate,
-      'utf-8'
-    );
+function extensionPackageJson(
+  name: string,
+  capitalizedName: string,
+  languageId: string,
+  extension: string,
+): string {
+  const pkg = {
+    name: `${name}-extension`,
+    displayName: capitalizedName,
+    description: `VS Code extension for ${capitalizedName}`,
+    version: '0.1.0',
+    private: true,
+    publisher: name,
+    engines: {
+      vscode: '^1.80.0',
+    },
+    categories: ['Programming Languages'],
+    activationEvents: [
+      'workspaceContains:**/generated/treelsp.json',
+      'workspaceContains:**/generated-lezer/treelsp.json',
+    ],
+    main: './dist/extension.js',
+    contributes: {
+      languages: [
+        {
+          id: languageId,
+          extensions: [extension],
+          aliases: [capitalizedName],
+        },
+      ],
+    },
+    scripts: {
+      build: 'tsdown',
+      dev: 'tsdown --watch',
+      package: 'vsce package',
+    },
+    dependencies: {
+      'vscode-languageclient': '^9.0.1',
+    },
+    devDependencies: {
+      '@types/vscode': '^1.80.0',
+      tsdown: '^0.2.17',
+      typescript: '^5.7.3',
+    },
+  };
+  return JSON.stringify(pkg, null, 2) + '\n';
+}
 
-    // Generate .gitignore
-    const gitignore = `node_modules
-dist
-generated/
-*.wasm
-*.log
+function extensionTsconfig(): string {
+  const config = {
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      strict: true,
+      outDir: './dist',
+      rootDir: './src',
+      lib: ['ES2022'],
+    },
+    include: ['src/**/*'],
+    exclude: ['node_modules', 'dist'],
+  };
+  return JSON.stringify(config, null, 2) + '\n';
+}
+
+function extensionTsdownConfig(): string {
+  return `import { defineConfig } from 'tsdown';
+
+export default defineConfig({
+  entry: ['src/extension.ts'],
+  format: ['cjs'],
+  dts: false,
+  clean: true,
+  platform: 'node',
+  external: ['vscode'],
+});
+`;
+}
+
+function extensionVscodeignore(): string {
+  return `src/
+node_modules/
+.gitignore
+tsconfig.json
+tsdown.config.ts
 *.tsbuildinfo
-.DS_Store
 `;
+}
 
-    await writeFile(
-      resolve(projectDir, '.gitignore'),
-      gitignore,
-      'utf-8'
-    );
+function extensionTs(capitalizedName: string, languageId: string): string {
+  return `/**
+ * ${capitalizedName} - VS Code Extension
+ * Discovers and launches the treelsp-generated language server.
+ */
 
-    // Generate README.md
-    const readme = `# ${capitalizedName}
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import {
+  LanguageClient,
+  LanguageClientOptions,
+  ServerOptions,
+  TransportKind,
+  State,
+} from 'vscode-languageclient/node';
 
-A language definition for treelsp.
+interface TreelspManifest {
+  name: string;
+  languageId: string;
+  fileExtensions: string[];
+  server: string;
+  textmateGrammar?: string;
+}
 
-## Getting Started
+const clients = new Map<string, LanguageClient>();
 
-Install dependencies:
+export async function activate(context: vscode.ExtensionContext) {
+  const manifests = await discoverManifests();
 
-\`\`\`bash
-npm install
-# or: pnpm install
-\`\`\`
-
-Generate grammar and build parser:
-
-\`\`\`bash
-npm run generate  # Generates grammar.js, ast.ts, server.ts
-npm run build     # Compiles to WASM
-\`\`\`
-
-Development workflow:
-
-\`\`\`bash
-npm run watch     # Auto-rebuild on changes
-\`\`\`
-
-## Project Structure
-
-- \`grammar.ts\` - Language definition (grammar, semantic, validation, LSP)
-- \`generated/\` - Generated files (grammar.js, WASM, types)
-- \`package.json\` - Project dependencies
-
-## Documentation
-
-- [treelsp Documentation](https://github.com/yourusername/treelsp)
-- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)
-
-## License
-
-MIT
-`;
-
-    await writeFile(
-      resolve(projectDir, 'README.md'),
-      readme,
-      'utf-8'
-    );
-
-    spinner.succeed('Project created!');
-
-    console.log(pc.dim('\nNext steps:'));
-    console.log(pc.dim(`  cd ${name}`));
-    console.log(pc.dim('  npm install'));
-    console.log(pc.dim('  Edit grammar.ts to define your language'));
-    console.log(pc.dim('  npm run generate'));
-    console.log(pc.dim('  npm run build'));
-
-  } catch (error) {
-    spinner.fail('Failed to create project');
-
-    if (error instanceof Error) {
-      console.error(pc.red(`\n${error.message}`));
-    }
-
-    process.exit(1);
+  for (const { manifest, manifestPath } of manifests) {
+    await startLanguageClient(manifest, manifestPath, context);
   }
+
+  // Watch for new or updated manifests
+  for (const pattern of ['**/generated/treelsp.json', '**/generated-lezer/treelsp.json']) {
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    watcher.onDidCreate(async (uri) => {
+      const data = await readManifest(uri.fsPath);
+      if (data) await startLanguageClient(data, uri.fsPath, context);
+    });
+    watcher.onDidChange(async (uri) => {
+      await stopClient(uri.fsPath);
+      const data = await readManifest(uri.fsPath);
+      if (data) await startLanguageClient(data, uri.fsPath, context);
+    });
+    watcher.onDidDelete(async (uri) => {
+      await stopClient(uri.fsPath);
+    });
+    context.subscriptions.push(watcher);
+  }
+}
+
+export async function deactivate(): Promise<void> {
+  const stops = [...clients.values()].map(c => c.stop());
+  await Promise.all(stops);
+  clients.clear();
+}
+
+async function discoverManifests(): Promise<Array<{ manifest: TreelspManifest; manifestPath: string }>> {
+  const results: Array<{ manifest: TreelspManifest; manifestPath: string }> = [];
+  for (const pattern of ['**/generated/treelsp.json', '**/generated-lezer/treelsp.json']) {
+    const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**');
+    for (const uri of uris) {
+      const data = await readManifest(uri.fsPath);
+      if (data) results.push({ manifest: data, manifestPath: uri.fsPath });
+    }
+  }
+  return results;
+}
+
+async function readManifest(fsPath: string): Promise<TreelspManifest | null> {
+  try {
+    const doc = await vscode.workspace.openTextDocument(fsPath);
+    const data = JSON.parse(doc.getText()) as TreelspManifest;
+    if (!data.name || !data.languageId || !data.fileExtensions || !data.server) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function startLanguageClient(
+  manifest: TreelspManifest,
+  manifestPath: string,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  if (clients.has(manifestPath)) return;
+
+  const generatedDir = path.dirname(manifestPath);
+  const serverModule = path.resolve(generatedDir, manifest.server);
+
+  if (!fs.existsSync(serverModule)) {
+    void vscode.window.showErrorMessage(
+      '${capitalizedName}: Server bundle not found. Run "pnpm build" first.',
+    );
+    return;
+  }
+
+  const serverOptions: ServerOptions = {
+    run: { module: serverModule, transport: TransportKind.stdio },
+    debug: {
+      module: serverModule,
+      transport: TransportKind.stdio,
+      options: { execArgv: ['--nolazy', '--inspect=6009'] },
+    },
+  };
+
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: manifest.fileExtensions.map(ext => ({
+      scheme: 'file' as const,
+      language: manifest.languageId,
+      pattern: \`**/*\${ext}\`,
+    })),
+    outputChannelName: '${capitalizedName} Language Server',
+  };
+
+  const client = new LanguageClient(
+    '${languageId}',
+    '${capitalizedName} Language Server',
+    serverOptions,
+    clientOptions,
+  );
+
+  client.onDidChangeState((event) => {
+    if (event.oldState === State.Running && event.newState === State.Stopped) {
+      void vscode.window.showWarningMessage(
+        '${capitalizedName}: Language server stopped unexpectedly.',
+      );
+    }
+  });
+
+  clients.set(manifestPath, client);
+  context.subscriptions.push(client);
+
+  try {
+    await client.start();
+  } catch (e) {
+    clients.delete(manifestPath);
+    void vscode.window.showErrorMessage(
+      \`${capitalizedName}: Failed to start language server: \${e instanceof Error ? e.message : String(e)}\`,
+    );
+  }
+}
+
+async function stopClient(key: string): Promise<void> {
+  const client = clients.get(key);
+  if (!client) return;
+  await client.stop();
+  clients.delete(key);
+}
+`;
 }
