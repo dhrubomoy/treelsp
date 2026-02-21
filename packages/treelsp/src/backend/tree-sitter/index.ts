@@ -6,3 +6,4 @@
  */
 
 export { TreeSitterRuntime } from '../../runtime/parser/tree-sitter/backend.js';
+export { createDocumentState } from '../../runtime/parser/tree-sitter/tree.js';

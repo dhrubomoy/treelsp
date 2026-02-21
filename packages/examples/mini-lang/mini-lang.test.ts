@@ -4,7 +4,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generateGrammar, generateAstTypes, generateManifest } from 'treelsp/codegen';
+import { generateAstTypes, generateManifest } from 'treelsp/codegen';
+import { generateGrammar } from 'treelsp/codegen/tree-sitter';
 import definition from './grammar.js';
 
 describe('mini-lang end-to-end', () => {

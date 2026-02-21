@@ -1208,8 +1208,8 @@ Audit of concrete issues that would block or frustrate a real user. Organized by
 
 ### Package Hygiene
 
-- [ ] **`codegen` and `runtime` are publicly exported** — contradicts the design that only `definition/` and `defaults/` are public API
-- [ ] **`tsdown` uses `platform: 'neutral'` for the server entry** — server imports Node.js-only `vscode-languageserver/lib/node/main.js`; should use `platform: 'node'`
+- [x] **`codegen` and `runtime` are publicly exported** — fixed: removed backend-specific re-exports; tree-sitter symbols moved to `treelsp/codegen/tree-sitter` and `treelsp/backend/tree-sitter`; shared interfaces remain in `treelsp/runtime`
+- [x] **`tsdown` uses `platform: 'neutral'` for the server entry** — fixed: changed to `platform: 'node'` for the entire treelsp package (server is Node-only; browser target is aspirational)
 - [ ] **Cross-document references match by name+declaredBy, not identity** — find-references returns false positives when two declaration kinds can declare the same name
 
 ### Documentation

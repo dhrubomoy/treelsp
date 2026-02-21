@@ -14,6 +14,6 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   clean: true,
-  platform: 'neutral',
+  platform: 'node',
   external: [/^node:/, '@lezer/generator', 'esbuild'],
 });

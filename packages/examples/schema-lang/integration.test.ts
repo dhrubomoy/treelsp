@@ -8,8 +8,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createDocumentState, createServer } from 'treelsp/runtime';
+import { createServer } from 'treelsp/runtime';
 import type { DocumentState, LanguageService } from 'treelsp/runtime';
+import { createDocumentState } from 'treelsp/backend/tree-sitter';
 import definition from './grammar.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -8,11 +8,6 @@ export type { ASTNode, Position, SourceProvider } from './parser/index.js';
 export type { DocumentState, DocumentMetadata, TextEdit, ContentChange } from './parser/index.js';
 export type { ParserBackend, ParserBackendCodegen, ParserBackendRuntime, BuildArtifact, CompileOptions } from './parser/index.js';
 
-// Parser — Tree-sitter implementation (default backend)
-export { TreeSitterASTNode, TreeSitterDocumentState, createDocumentState } from './parser/index.js';
-export { TreeSitterRuntime } from './parser/index.js';
-export { createParser, loadLanguage, preloadParser } from './parser/index.js';
-
 // Scope
 export { Scope, type Declaration, type Reference } from './scope/index.js';
 export {
