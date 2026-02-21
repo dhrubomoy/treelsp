@@ -15,7 +15,7 @@ describe('config', () => {
     });
 
     it('loads treelsp-config.json from examples', () => {
-      const examplesConfig = resolve(import.meta.dirname!, '..', '..', 'examples', 'treelsp-config.json');
+      const examplesConfig = resolve(import.meta.dirname, '..', '..', 'examples', 'treelsp-config.json');
       const result = resolveConfig(examplesConfig);
 
       expect(result.source).toBe('file');
@@ -31,7 +31,7 @@ describe('config', () => {
     });
 
     it('resolves backend to "tree-sitter" by default', () => {
-      const examplesConfig = resolve(import.meta.dirname!, '..', '..', 'examples', 'treelsp-config.json');
+      const examplesConfig = resolve(import.meta.dirname, '..', '..', 'examples', 'treelsp-config.json');
       const result = resolveConfig(examplesConfig);
 
       const treeSitterProject = result.projects.find(p => !p.outDir.includes('lezer'));
@@ -39,7 +39,7 @@ describe('config', () => {
     });
 
     it('resolves lezer backend when specified', () => {
-      const examplesConfig = resolve(import.meta.dirname!, '..', '..', 'examples', 'treelsp-config.json');
+      const examplesConfig = resolve(import.meta.dirname, '..', '..', 'examples', 'treelsp-config.json');
       const result = resolveConfig(examplesConfig);
 
       const lezerProject = result.projects.find(p => p.backend === 'lezer');
@@ -49,7 +49,7 @@ describe('config', () => {
   });
 
   describe('config validation', () => {
-    const tmpDir = resolve(import.meta.dirname!, '..', '.test-config-tmp');
+    const tmpDir = resolve(import.meta.dirname, '..', '.test-config-tmp');
 
     function withTempConfig(content: string): string {
       mkdirSync(tmpDir, { recursive: true });
