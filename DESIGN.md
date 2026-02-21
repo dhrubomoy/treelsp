@@ -1159,7 +1159,7 @@ This section tells Claude Code what is settled and what still needs discussion.
 ---
 ## TODO:
 - [ ] Update readme with the latest info, especially that this tries to be a parser agnostic tool. Add commands to generate treesitter and lezer.
-- [ ] `treelsp init` should create two packages. One called language which will have the grammar.ts and all the generated files. Another package is called "extension" which will have all the code necessary to run a vscode extension.
+- [x] `treelsp init` should create two packages. One called language which will have the grammar.ts and all the generated files. Another package is called "extension" which will have all the code necessary to run a vscode extension.
 
 ## Design question:
 - For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
