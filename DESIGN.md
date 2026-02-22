@@ -1163,6 +1163,14 @@ This section tells Claude Code what is settled and what still needs discussion.
 
 ## Design question:
 - [ ] For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern, which can be error prone? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
+- [ ] Can the grammar api for rule() not take a RuleDefinition instead of string. That way we get a validation error.
+```
+parameter: r => r.field('name', r.rule(identifier))
+```
+Instead of
+```
+parameter: r => r.field('name', r.rule('identifier'))
+```
 
 ## Production Readiness
 

@@ -9,6 +9,7 @@
  */
 
 import type { LanguageDefinition, RuleDefinition, RuleBuilder } from '../../definition/index.js';
+import { createBuilderProxy } from '../../definition/grammar.js';
 import { toPascalCase } from './grammar.js';
 
 type RuleNode =
@@ -30,6 +31,7 @@ type RuleNode =
   | { type: 'rule'; name: string };
 
 class ExternalTokenBuilder<T extends string> {
+  _proxy: RuleBuilder<T> | null = null;
   seq(...rules: RuleDefinition<T>[]): RuleNode { return { type: 'seq', rules: rules.map(r => this.normalize(r)) }; }
   choice(...rules: RuleDefinition<T>[]): RuleNode { return { type: 'choice', rules: rules.map(r => this.normalize(r)) }; }
   optional(rule: RuleDefinition<T>): RuleNode { return { type: 'optional', rule: this.normalize(rule) }; }
@@ -53,7 +55,10 @@ class ExternalTokenBuilder<T extends string> {
   private normalize(rule: RuleDefinition<T>): RuleNode {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };
-    if (typeof rule === 'function') return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
+    if (typeof rule === 'function') {
+      const r = this._proxy ?? (this as unknown as RuleBuilder<T>);
+      return rule(r) as unknown as RuleNode;
+    }
     return rule as unknown as RuleNode;
   }
 }
@@ -76,7 +81,7 @@ export function generateExternalTokens<T extends string>(
 ): string | null {
   if (!definition.externals) return null;
 
-  const builder = new ExternalTokenBuilder<T>();
+  const builder = createBuilderProxy<T>(new ExternalTokenBuilder<T>());
   const rawExternals = definition.externals(builder);
 
   const externalNames = new Set<string>();

@@ -4,6 +4,7 @@
  */
 
 import type { LanguageDefinition, RuleDefinition, RuleBuilder } from '../definition/index.js';
+import { createBuilderProxy } from '../definition/grammar.js';
 
 /**
  * Internal representation of rule nodes (shared with grammar.ts)
@@ -40,6 +41,7 @@ interface FieldInfo {
  * Builder that captures rule structure for type analysis
  */
 class TypeAnalysisBuilder<T extends string> {
+  _proxy: RuleBuilder<T> | null = null;
   seq(...rules: RuleDefinition<T>[]): RuleNode {
     return { type: 'seq', rules: rules.map(r => this.normalize(r)) };
   }
@@ -102,7 +104,8 @@ class TypeAnalysisBuilder<T extends string> {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };
     if (typeof rule === 'function') {
-      return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
+      const r = this._proxy ?? (this as unknown as RuleBuilder<T>);
+      return rule(r) as unknown as RuleNode;
     }
     return rule as unknown as RuleNode;
   }
@@ -254,7 +257,7 @@ function fieldTypeString<T extends string>(field: FieldInfo, ruleNames: T[]): st
 export function generateAstTypes<T extends string>(
   definition: LanguageDefinition<T>
 ): string {
-  const builder = new TypeAnalysisBuilder<T>();
+  const builder = createBuilderProxy<T>(new TypeAnalysisBuilder<T>());
   const grammar = definition.grammar;
   const ruleNames = Object.keys(grammar) as T[];
 
@@ -273,7 +276,7 @@ export function generateAstTypes<T extends string>(
   for (const ruleName of ruleNames) {
     const ruleFn = grammar[ruleName];
     if (!ruleFn) continue;
-    const ruleNode = ruleFn(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
+    const ruleNode = ruleFn(builder) as unknown as RuleNode;
     const fields = mergeFields(extractFields(ruleNode));
 
     const interfaceName = `${toPascalCase(ruleName)}Node`;

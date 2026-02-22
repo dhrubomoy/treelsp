@@ -11,107 +11,107 @@ export default defineLanguage({
   entry: 'program',
   word: 'identifier',
 
-  extras: r => [/\s+/, r.rule('comment')],
+  extras: r => [/\s+/, r.comment],
 
   grammar: {
     // Program is a sequence of statements
-    program: r => r.repeat(r.rule('statement')),
+    program: r => r.repeat(r.statement),
 
     // Statements
     statement: r => r.choice(
-      r.rule('global_var_decl'),
-      r.rule('variable_decl'),
-      r.rule('function_decl'),
-      r.rule('return_statement'),
-      r.rule('expr_statement'),
+      r.global_var_decl,
+      r.variable_decl,
+      r.function_decl,
+      r.return_statement,
+      r.expr_statement,
     ),
 
     // Global variable declaration: var name = value;
     global_var_decl: r => r.seq(
       'var',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '=',
-      r.field('value', r.rule('expression')),
+      r.field('value', r.expression),
       ';',
     ),
 
     // Variable declaration: let name = value;
     variable_decl: r => r.seq(
       'let',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '=',
-      r.field('value', r.rule('expression')),
+      r.field('value', r.expression),
       ';',
     ),
 
     // Function declaration: fn name(params) { body }
     function_decl: r => r.seq(
       'fn',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '(',
-      r.field('params', r.optional(r.rule('parameter_list'))),
+      r.field('params', r.optional(r.parameter_list)),
       ')',
-      r.field('body', r.rule('block')),
+      r.field('body', r.block),
     ),
 
     // Comma-separated parameter list
     parameter_list: r => r.seq(
-      r.rule('parameter'),
-      r.repeat(r.seq(',', r.rule('parameter'))),
+      r.parameter,
+      r.repeat(r.seq(',', r.parameter)),
     ),
 
     // Single parameter
-    parameter: r => r.field('name', r.rule('identifier')),
+    parameter: r => r.field('name', r.identifier),
 
     // Block: { statement* }
     block: r => r.seq(
       '{',
-      r.repeat(r.rule('statement')),
+      r.repeat(r.statement),
       '}',
     ),
 
     // Return statement: return expr;
     return_statement: r => r.seq(
       'return',
-      r.field('value', r.rule('expression')),
+      r.field('value', r.expression),
       ';',
     ),
 
     // Expression statement: expr;
     expr_statement: r => r.seq(
-      r.field('expr', r.rule('expression')),
+      r.field('expr', r.expression),
       ';',
     ),
 
     // Expressions
     expression: r => r.choice(
-      r.rule('binary_expr'),
-      r.rule('call_expr'),
-      r.rule('identifier'),
-      r.rule('number'),
-      r.rule('string_literal'),
+      r.binary_expr,
+      r.call_expr,
+      r.identifier,
+      r.number,
+      r.string_literal,
     ),
 
     // Function call: name(args)
     call_expr: r => r.prec(3, r.seq(
-      r.field('callee', r.rule('identifier')),
+      r.field('callee', r.identifier),
       '(',
-      r.field('args', r.optional(r.rule('argument_list'))),
+      r.field('args', r.optional(r.argument_list)),
       ')',
     )),
 
     // Comma-separated argument list
     argument_list: r => r.seq(
-      r.rule('expression'),
-      r.repeat(r.seq(',', r.rule('expression'))),
+      r.expression,
+      r.repeat(r.seq(',', r.expression)),
     ),
 
     // Binary expressions with precedence
     binary_expr: r => r.choice(
-      r.prec.left(1, r.seq(r.rule('expression'), '+', r.rule('expression'))),
-      r.prec.left(1, r.seq(r.rule('expression'), '-', r.rule('expression'))),
-      r.prec.left(2, r.seq(r.rule('expression'), '*', r.rule('expression'))),
-      r.prec.left(2, r.seq(r.rule('expression'), '/', r.rule('expression'))),
+      r.prec.left(1, r.seq(r.expression, '+', r.expression)),
+      r.prec.left(1, r.seq(r.expression, '-', r.expression)),
+      r.prec.left(2, r.seq(r.expression, '*', r.expression)),
+      r.prec.left(2, r.seq(r.expression, '/', r.expression)),
     ),
 
     // Tokens

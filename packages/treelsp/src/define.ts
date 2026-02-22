@@ -1,4 +1,4 @@
-import type { RuleBuilder } from './definition/grammar.js';
+import type { RuleBuilderWithRefs, RuleDefinition } from './definition/grammar.js';
 import type { SemanticDefinition } from './definition/semantic.js';
 import type { ValidationDefinition } from './definition/validation.js';
 import type { LspDefinition } from './definition/lsp.js';
@@ -10,6 +10,11 @@ import type { LanguageDefinition } from './definition/index.js';
  * This is the main entry point for creating a treelsp language. Returns a
  * `LanguageDefinition` that can be passed to the CLI (`treelsp generate` /
  * `treelsp build`) to produce a parser and LSP server.
+ *
+ * The grammar's rule names are inferred as a string union type `T`, enabling:
+ * - Type-safe rule references: `r.rule('identifier')` errors on typos
+ * - Direct property access: `r.identifier` as shorthand for `r.rule('identifier')`
+ * - Autocomplete for all rule names on the `r` parameter
  *
  * @param definition.name - Language display name (e.g., `"MiniLang"`)
  * @param definition.fileExtensions - File extensions to associate (e.g., `[".mini"]`)
@@ -31,32 +36,30 @@ import type { LanguageDefinition } from './definition/index.js';
  *   entry: 'program',
  *   word: 'identifier',
  *   grammar: {
- *     program: r => r.repeat(r.rule('statement')),
- *     statement: r => r.choice(r.rule('variable_decl')),
- *     variable_decl: r => r.seq('let', r.field('name', r.rule('identifier')), '=', r.field('value', r.rule('expression')), ';'),
- *     expression: r => r.choice(r.rule('identifier'), r.rule('number')),
+ *     program: r => r.repeat(r.statement),
+ *     statement: r => r.choice(r.variable_decl),
+ *     variable_decl: r => r.seq('let', r.field('name', r.identifier), '=', r.field('value', r.expression), ';'),
+ *     expression: r => r.choice(r.identifier, r.number),
  *     identifier: r => r.token(/[a-zA-Z_]\w{@literal *}/),
  *     number: r => r.token(/[0-9]+/),
  *   },
  * });
  * ```
  */
-export function defineLanguage<
-  const Grammar extends Record<string, (r: RuleBuilder<string>) => unknown>
->(
+export function defineLanguage<const T extends string>(
   definition: {
     name: string;
     fileExtensions: string[];
-    entry: Extract<keyof Grammar, string>;
-    word?: Extract<keyof Grammar, string>;
-    conflicts?: (r: RuleBuilder<string>) => unknown[][];
-    extras?: (r: RuleBuilder<string>) => unknown[];
-    externals?: (r: RuleBuilder<string>) => unknown[];
-    grammar: Grammar;
-    semantic?: SemanticDefinition<Extract<keyof Grammar, string>>;
-    validation?: ValidationDefinition<Extract<keyof Grammar, string>>;
-    lsp?: LspDefinition<Extract<keyof Grammar, string>>;
+    entry: NoInfer<T>;
+    word?: NoInfer<T>;
+    conflicts?: (r: RuleBuilderWithRefs<NoInfer<T>>) => unknown[][];
+    extras?: (r: RuleBuilderWithRefs<NoInfer<T>>) => unknown[];
+    externals?: (r: RuleBuilderWithRefs<NoInfer<T>>) => unknown[];
+    grammar: Record<T, (r: RuleBuilderWithRefs<T>) => RuleDefinition<T>>;
+    semantic?: SemanticDefinition<NoInfer<T>>;
+    validation?: ValidationDefinition<NoInfer<T>>;
+    lsp?: LspDefinition<NoInfer<T>>;
   }
-): LanguageDefinition<Extract<keyof Grammar, string>> {
-  return definition as LanguageDefinition<Extract<keyof Grammar, string>>;
+): LanguageDefinition<T> {
+  return definition as unknown as LanguageDefinition<T>;
 }
