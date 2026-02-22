@@ -13,31 +13,31 @@ function createMiniLangDefinition(): LanguageDefinition<
     entry: 'program',
     word: 'identifier',
     grammar: {
-      program: r => r.repeat(r.rule('statement')),
+      program: r => r.repeat(r.statement),
       statement: r => r.choice(
-        r.rule('variable_decl'),
-        r.rule('expr_statement'),
+        r.variable_decl,
+        r.expr_statement,
       ),
       variable_decl: r => r.seq(
         'let',
-        r.field('name', r.rule('identifier')),
+        r.field('name', r.identifier),
         '=',
-        r.field('value', r.rule('expression')),
+        r.field('value', r.expression),
         ';',
       ),
       expr_statement: r => r.seq(
-        r.field('expr', r.rule('expression')),
+        r.field('expr', r.expression),
         ';',
       ),
       expression: r => r.choice(
-        r.rule('binary_expr'),
-        r.rule('identifier'),
-        r.rule('number'),
+        r.binary_expr,
+        r.identifier,
+        r.number,
       ),
       binary_expr: r => r.prec.left(1, r.seq(
-        r.field('left', r.rule('expression')),
+        r.field('left', r.expression),
         r.field('op', '+'),
-        r.field('right', r.rule('expression')),
+        r.field('right', r.expression),
       )),
       identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
       number: r => r.token(/[0-9]+/),
@@ -124,8 +124,8 @@ describe('generateAstTypes', () => {
       word: 'a',
       grammar: {
         root: r => r.choice(
-          r.field('x', r.rule('a')),
-          r.field('y', r.rule('b')),
+          r.field('x', r.a),
+          r.field('y', r.b),
         ),
         a: r => r.token(/a/),
         b: r => r.token(/b/),
@@ -144,7 +144,7 @@ describe('generateAstTypes', () => {
       entry: 'root',
       word: 'token',
       grammar: {
-        root: r => r.repeat(r.rule('token')),
+        root: r => r.repeat(r.token),
         token: r => r.token(/[a-z]+/),
       },
     };

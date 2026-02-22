@@ -4,6 +4,7 @@
  */
 
 import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder, SemanticRule } from '../../definition/index.js';
+import { createBuilderProxy } from '../../definition/grammar.js';
 
 /**
  * Internal representation of rule nodes (shared with grammar.ts)
@@ -30,6 +31,7 @@ type RuleNode =
  * Builder that captures rule structure for locals analysis
  */
 class LocalsBuilder<T extends string> {
+  _proxy: RuleBuilder<T> | null = null;
   seq(...rules: RuleDefinition<T>[]): RuleNode {
     return { type: 'seq', rules: rules.map(r => this.normalize(r)) };
   }
@@ -84,15 +86,12 @@ class LocalsBuilder<T extends string> {
     return { type: 'alias', rule: this.normalize(rule), name };
   }
 
-  rule(name: T): RuleNode {
-    return { type: 'rule', name };
-  }
-
   private normalize(rule: RuleDefinition<T>): RuleNode {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };
     if (typeof rule === 'function') {
-      return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
+      const r = this._proxy ?? (this as unknown as RuleBuilder<T>);
+      return rule(r) as unknown as RuleNode;
     }
     return rule as unknown as RuleNode;
   }
@@ -169,12 +168,12 @@ function isTokenRule(node: RuleNode): boolean {
 export function generateLocals<T extends string>(
   definition: LanguageDefinition<T>
 ): string {
-  const builder = new LocalsBuilder<T>();
+  const builder = createBuilderProxy<T>(new LocalsBuilder<T>());
 
   // Build all rules
   const rules: Record<string, RuleNode> = {};
   for (const [name, ruleFn] of Object.entries(definition.grammar)) {
-    rules[name] = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
+    rules[name] = (ruleFn as RuleFn<T>)(builder) as unknown as RuleNode;
   }
 
   const semantic: Record<string, SemanticRule | undefined> = definition.semantic ?? {};

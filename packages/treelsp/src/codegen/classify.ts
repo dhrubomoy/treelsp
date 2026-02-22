@@ -4,6 +4,7 @@
  */
 
 import type { RuleDefinition, RuleFn, RuleBuilder } from '../definition/index.js';
+import { createBuilderProxy } from '../definition/grammar.js';
 
 /**
  * Internal representation of rule nodes (shared across codegen modules)
@@ -30,6 +31,7 @@ export type RuleNode =
  * Builder that captures rule structure for analysis
  */
 export class RuleNodeBuilder<T extends string> {
+  _proxy: RuleBuilder<T> | null = null;
   seq(...rules: RuleDefinition<T>[]): RuleNode {
     return { type: 'seq', rules: rules.map(r => this.normalize(r)) };
   }
@@ -90,15 +92,12 @@ export class RuleNodeBuilder<T extends string> {
     return { type: 'alias', rule: this.normalize(rule), name };
   }
 
-  rule(name: T): RuleNode {
-    return { type: 'rule', name };
-  }
-
   normalize(rule: RuleDefinition<T>): RuleNode {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };
     if (typeof rule === 'function') {
-      return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
+      const r = this._proxy ?? (this as unknown as RuleBuilder<T>);
+      return rule(r) as unknown as RuleNode;
     }
     return rule as unknown as RuleNode;
   }
@@ -168,14 +167,14 @@ export function classifyTokenRule(ruleName: string): string | null {
 export function buildRuleNodes<T extends string>(
   grammar: Record<string, RuleFn<T>>,
 ): { builder: RuleNodeBuilder<T>; rules: Record<string, RuleNode> } {
-  const builder = new RuleNodeBuilder<T>();
+  const rawBuilder = new RuleNodeBuilder<T>();
+  const builder = createBuilderProxy<T>(rawBuilder);
   const rules: Record<string, RuleNode> = {};
   for (const [name, ruleFn] of Object.entries(grammar)) {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    const raw: unknown = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>);
+    const raw: unknown = ruleFn(builder);
     rules[name] = raw as RuleNode;
   }
-  return { builder, rules };
+  return { builder: rawBuilder, rules };
 }
 
 /**

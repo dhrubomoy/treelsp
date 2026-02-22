@@ -4,6 +4,7 @@
  */
 
 import type { LanguageDefinition, RuleDefinition, RuleFn, RuleBuilder } from '../../definition/index.js';
+import { createBuilderProxy } from '../../definition/grammar.js';
 
 /**
  * Internal representation of rule nodes
@@ -36,6 +37,9 @@ type RuleNode =
  * However, it is structurally compatible and can be used wherever RuleBuilder is expected.
  */
 class GrammarBuilder<T extends string> {
+  /** Proxy wrapper — set by createBuilderProxy so r.identifier works in rule functions */
+  _proxy: RuleBuilder<T> | null = null;
+
   seq(...rules: RuleDefinition<T>[]): RuleNode {
     return {
       type: 'seq',
@@ -125,13 +129,6 @@ class GrammarBuilder<T extends string> {
     };
   }
 
-  rule(name: T): RuleNode {
-    return {
-      type: 'rule',
-      name,
-    };
-  }
-
   /**
    * Normalize a RuleDefinition into a RuleNode
    * Handles strings, regexes, functions, and existing nodes
@@ -144,9 +141,10 @@ class GrammarBuilder<T extends string> {
       return { type: 'regex', value: rule };
     }
     if (typeof rule === 'function') {
-      // Call the rule function with this builder (structurally compatible with RuleBuilder)
-      // The result is always a RuleNode at runtime
-      return rule(this as unknown as RuleBuilder<T>) as unknown as RuleNode;
+      // Call the rule function with the proxy (if available) so r.identifier works,
+      // or fall back to the raw builder for backward compatibility
+      const r = this._proxy ?? (this as unknown as RuleBuilder<T>);
+      return rule(r) as unknown as RuleNode;
     }
     // If it's already a RuleNode (returned from a builder method), use it directly
     return rule as unknown as RuleNode;
@@ -234,12 +232,12 @@ function serializeNode(node: RuleNode, indent = 0): string {
 export function generateGrammar<T extends string>(
   definition: LanguageDefinition<T>
 ): string {
-  const builder = new GrammarBuilder<T>();
+  const builder = createBuilderProxy<T>(new GrammarBuilder<T>());
 
   // Build all rules
   const rules: Record<string, RuleNode> = {};
   for (const [name, ruleFn] of Object.entries(definition.grammar)) {
-    rules[name] = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
+    rules[name] = (ruleFn as RuleFn<T>)(builder) as unknown as RuleNode;
   }
 
   // Validate entry rule exists

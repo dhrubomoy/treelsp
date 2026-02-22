@@ -15,52 +15,52 @@ describe('generateGrammar', () => {
       word: 'identifier',
 
       grammar: {
-        program: r => r.repeat(r.rule('statement')),
+        program: r => r.repeat(r.statement),
 
         statement: r => r.choice(
-          r.rule('variable_decl'),
-          r.rule('expr_statement'),
+          r.variable_decl,
+          r.expr_statement,
         ),
 
         variable_decl: r => r.seq(
           'let',
-          r.field('name', r.rule('identifier')),
+          r.field('name', r.identifier),
           '=',
-          r.field('value', r.rule('expression')),
+          r.field('value', r.expression),
           ';',
         ),
 
         expr_statement: r => r.seq(
-          r.field('expr', r.rule('expression')),
+          r.field('expr', r.expression),
           ';',
         ),
 
         expression: r => r.choice(
-          r.rule('binary_expr'),
-          r.rule('identifier'),
-          r.rule('number'),
+          r.binary_expr,
+          r.identifier,
+          r.number,
         ),
 
         binary_expr: r => r.choice(
           r.prec.left(1, r.seq(
-            r.field('left', r.rule('expression')),
+            r.field('left', r.expression),
             r.field('op', '+'),
-            r.field('right', r.rule('expression')),
+            r.field('right', r.expression),
           )),
           r.prec.left(1, r.seq(
-            r.field('left', r.rule('expression')),
+            r.field('left', r.expression),
             r.field('op', '-'),
-            r.field('right', r.rule('expression')),
+            r.field('right', r.expression),
           )),
           r.prec.left(2, r.seq(
-            r.field('left', r.rule('expression')),
+            r.field('left', r.expression),
             r.field('op', '*'),
-            r.field('right', r.rule('expression')),
+            r.field('right', r.expression),
           )),
           r.prec.left(2, r.seq(
-            r.field('left', r.rule('expression')),
+            r.field('left', r.expression),
             r.field('op', '/'),
-            r.field('right', r.rule('expression')),
+            r.field('right', r.expression),
           )),
         ),
 
@@ -114,8 +114,8 @@ describe('generateGrammar', () => {
       word: 'identifier',
 
       grammar: {
-        program: r => r.repeat(r.rule('statement')),
-        statement: r => r.rule('identifier'),
+        program: r => r.repeat(r.statement),
+        statement: r => r.identifier,
         identifier: r => r.token(/[a-zA-Z]+/),
         number: r => r.token(/[0-9]+/),
       },
@@ -143,7 +143,7 @@ describe('generateGrammar', () => {
       entry: 'rule1',
 
       grammar: {
-        rule1: r => r.seq('let', r.rule('rule2'), ';'),
+        rule1: r => r.seq('let', r.rule2, ';'),
         rule2: r => r.token(/[a-z]+/),
       },
     };
@@ -162,7 +162,7 @@ describe('generateGrammar', () => {
       entry: 'expr',
 
       grammar: {
-        expr: r => r.choice(r.rule('a'), r.rule('b')),
+        expr: r => r.choice(r.a, r.b),
         a: r => r.token('a'),
         b: r => r.token('b'),
       },
@@ -183,7 +183,7 @@ describe('generateGrammar', () => {
       grammar: {
         decl: r => r.seq(
           'let',
-          r.field('name', r.rule('name')),
+          r.field('name', r.name),
           ';'
         ),
         name: r => r.token(/[a-z]+/),
@@ -201,10 +201,10 @@ describe('generateGrammar', () => {
       entry: 'expr',
 
       grammar: {
-        expr: r => r.choice(r.rule('binary')),
+        expr: r => r.choice(r.binary),
         binary: r => r.choice(
-          r.prec.left(1, r.seq(r.rule('expr'), '+', r.rule('expr'))),
-          r.prec.left(2, r.seq(r.rule('expr'), '*', r.rule('expr'))),
+          r.prec.left(1, r.seq(r.expr, '+', r.expr)),
+          r.prec.left(2, r.seq(r.expr, '*', r.expr)),
         ),
       },
     };
@@ -221,7 +221,7 @@ describe('generateGrammar', () => {
       entry: 'rule1',
 
       conflicts: r => [
-        [r.rule('rule1'), r.rule('rule2')],
+        [r.rule1, r.rule2],
       ],
 
       grammar: {
@@ -245,7 +245,7 @@ describe('generateGrammar', () => {
       extras: _r => [/\s+/],
 
       grammar: {
-        program: r => r.repeat(r.rule('identifier')),
+        program: r => r.repeat(r.identifier),
         identifier: r => r.token(/[a-zA-Z]+/),
       },
     };
@@ -262,10 +262,10 @@ describe('generateGrammar', () => {
       entry: 'program',
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      extras: r => [/\s+/, r.rule('comment')],
+      extras: r => [/\s+/, r.comment],
 
       grammar: {
-        program: r => r.repeat(r.rule('identifier')),
+        program: r => r.repeat(r.identifier),
         identifier: r => r.token(/[a-zA-Z]+/),
         comment: r => r.token(/\/\/.*/),
       },
@@ -299,10 +299,10 @@ describe('generateGrammar', () => {
       entry: 'program',
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      externals: r => [r.rule('indent'), r.rule('dedent')],
+      externals: r => [r.indent, r.dedent],
 
       grammar: {
-        program: r => r.repeat(r.rule('identifier')),
+        program: r => r.repeat(r.identifier),
         identifier: r => r.token(/[a-zA-Z]+/),
       },
     };
@@ -320,10 +320,10 @@ describe('generateGrammar', () => {
       entry: 'program',
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      externals: r => [r.rule('newline')],
+      externals: r => [r.newline],
 
       grammar: {
-        program: r => r.repeat(r.rule('identifier')),
+        program: r => r.repeat(r.identifier),
         identifier: r => r.token(/[a-zA-Z]+/),
       },
     };
@@ -356,9 +356,9 @@ describe('generateGrammar', () => {
 
       grammar: {
         program: r => r.seq(
-          r.repeat(r.rule('item')),
-          r.repeat1(r.rule('item')),
-          r.optional(r.rule('item'))
+          r.repeat(r.item),
+          r.repeat1(r.item),
+          r.optional(r.item)
         ),
         item: r => r.token('x'),
       },
@@ -463,9 +463,9 @@ describe('generateGrammar', () => {
       word: 'expression',
       grammar: {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        program: (r: any) => r.repeat(r.rule('expression')),
+        program: (r: any) => r.repeat(r.expression),
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        expression: (r: any) => r.choice(r.rule('identifier'), r.rule('number')),
+        expression: (r: any) => r.choice(r.identifier, r.number),
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         identifier: (r: any) => r.token(/[a-z]+/),
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return

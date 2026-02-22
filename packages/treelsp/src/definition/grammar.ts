@@ -12,10 +12,11 @@ export type RuleDefinition<T extends string = string> =
 export type RuleFn<T extends string = string> = (builder: RuleBuilder<T>) => RuleDefinition<T>;
 
 /**
- * Grammar definition - maps rule names to rule functions
+ * Grammar definition - maps rule names to rule functions.
+ * Callbacks receive `RuleBuilderWithRefs<T>` so `r.identifier` works with autocomplete.
  */
 export type GrammarDefinition<T extends string = string> = {
-  [K in T]: RuleFn<T>;
+  [K in T]: (builder: RuleBuilderWithRefs<T>) => RuleDefinition<T>;
 };
 
 /**
@@ -49,7 +50,34 @@ export interface RuleBuilder<T extends string = string> {
 
   // Aliasing
   alias(rule: RuleDefinition<T>, name: string): RuleDefinition<T>;
+}
 
-  // Rule references - type-safe forward references
-  rule(name: T): RuleDefinition<T>;
+/**
+ * Rule builder extended with direct rule name access.
+ * `r.identifier` creates a rule reference (equivalent to `$.identifier` in Tree-sitter).
+ * Builder method names are excluded to avoid intersection conflicts.
+ */
+export type RuleBuilderWithRefs<T extends string> = RuleBuilder<T> & {
+  readonly [K in Exclude<T, keyof RuleBuilder<T>>]: RuleDefinition<T>;
+};
+
+/**
+ * Wrap a builder object in a Proxy that treats unknown property access as rule references.
+ * Known builder methods/properties take priority; unknown string properties return `{ type: 'rule', name }`.
+ * Also stores the proxy reference on `builder._proxy` for use in `normalize()`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createBuilderProxy<T extends string>(builder: any): RuleBuilder<T> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const proxy = new Proxy(builder, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    get(target: any, prop: string | symbol, receiver: unknown): unknown {
+      if (typeof prop === 'symbol') return Reflect.get(target, prop, receiver);
+      if (prop in target) return Reflect.get(target, prop, receiver);
+      return { type: 'rule', name: prop };
+    },
+  });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  builder._proxy = proxy as RuleBuilder<T>;
+  return proxy as RuleBuilder<T>;
 }

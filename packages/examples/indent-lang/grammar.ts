@@ -12,125 +12,125 @@ export default defineLanguage({
   word: 'identifier',
 
   // Horizontal whitespace only — newlines are significant (handled by external scanner)
-  extras: r => [/[ \t]/, r.rule('comment')],
+  extras: r => [/[ \t]/, r.comment],
 
   // External scanner tokens for indentation-sensitive parsing
-  externals: r => [r.rule('indent'), r.rule('dedent'), r.rule('newline')],
+  externals: r => [r.indent, r.dedent, r.newline],
 
   grammar: {
     // Program is a sequence of statements separated by newlines
-    program: r => r.repeat(r.choice(r.rule('statement'), r.rule('newline'))),
+    program: r => r.repeat(r.choice(r.statement, r.newline)),
 
     // Statements
     statement: r => r.choice(
-      r.rule('function_def'),
-      r.rule('if_stmt'),
-      r.rule('return_stmt'),
-      r.rule('assignment'),
-      r.rule('expr_stmt'),
+      r.function_def,
+      r.if_stmt,
+      r.return_stmt,
+      r.assignment,
+      r.expr_stmt,
     ),
 
     // Assignment: name = value\n
     assignment: r => r.seq(
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '=',
-      r.field('value', r.rule('expression')),
-      r.rule('newline'),
+      r.field('value', r.expression),
+      r.newline,
     ),
 
     // Function definition: def name(params):\n indent body dedent
     function_def: r => r.seq(
       'def',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '(',
-      r.field('params', r.optional(r.rule('parameter_list'))),
+      r.field('params', r.optional(r.parameter_list)),
       ')',
       ':',
-      r.field('body', r.rule('block')),
+      r.field('body', r.block),
     ),
 
     // If statement: if condition:\n indent body dedent
     if_stmt: r => r.seq(
       'if',
-      r.field('condition', r.rule('expression')),
+      r.field('condition', r.expression),
       ':',
-      r.field('body', r.rule('block')),
+      r.field('body', r.block),
     ),
 
     // Return statement: return value\n
     return_stmt: r => r.seq(
       'return',
-      r.field('value', r.rule('expression')),
-      r.rule('newline'),
+      r.field('value', r.expression),
+      r.newline,
     ),
 
     // Expression statement: expression\n
     expr_stmt: r => r.seq(
-      r.field('expr', r.rule('expression')),
-      r.rule('newline'),
+      r.field('expr', r.expression),
+      r.newline,
     ),
 
     // Indented block: newline indent statements dedent
     block: r => r.seq(
-      r.rule('newline'),
-      r.rule('indent'),
-      r.repeat1(r.rule('statement')),
-      r.rule('dedent'),
+      r.newline,
+      r.indent,
+      r.repeat1(r.statement),
+      r.dedent,
     ),
 
     // Comma-separated parameter list
     parameter_list: r => r.seq(
-      r.rule('parameter'),
-      r.repeat(r.seq(',', r.rule('parameter'))),
+      r.parameter,
+      r.repeat(r.seq(',', r.parameter)),
     ),
 
     // Single parameter
-    parameter: r => r.field('name', r.rule('identifier')),
+    parameter: r => r.field('name', r.identifier),
 
     // Expressions
     expression: r => r.choice(
-      r.rule('binary_expr'),
-      r.rule('call_expr'),
-      r.rule('identifier'),
-      r.rule('number'),
-      r.rule('string_literal'),
+      r.binary_expr,
+      r.call_expr,
+      r.identifier,
+      r.number,
+      r.string_literal,
     ),
 
     // Function call: callee(args)
     call_expr: r => r.prec(3, r.seq(
-      r.field('callee', r.rule('identifier')),
+      r.field('callee', r.identifier),
       '(',
-      r.field('args', r.optional(r.rule('argument_list'))),
+      r.field('args', r.optional(r.argument_list)),
       ')',
     )),
 
     // Comma-separated argument list
     argument_list: r => r.seq(
-      r.rule('expression'),
-      r.repeat(r.seq(',', r.rule('expression'))),
+      r.expression,
+      r.repeat(r.seq(',', r.expression)),
     ),
 
     // Binary expressions with precedence
     binary_expr: r => r.choice(
       r.prec.left(1, r.seq(
-        r.field('left', r.rule('expression')),
+        r.field('left', r.expression),
         r.field('op', '+'),
-        r.field('right', r.rule('expression')),
+        r.field('right', r.expression),
       )),
       r.prec.left(1, r.seq(
-        r.field('left', r.rule('expression')),
+        r.field('left', r.expression),
         r.field('op', '-'),
-        r.field('right', r.rule('expression')),
+        r.field('right', r.expression),
       )),
       r.prec.left(2, r.seq(
-        r.field('left', r.rule('expression')),
+        r.field('left', r.expression),
         r.field('op', '*'),
-        r.field('right', r.rule('expression')),
+        r.field('right', r.expression),
       )),
       r.prec.left(2, r.seq(
-        r.field('left', r.rule('expression')),
+        r.field('left', r.expression),
         r.field('op', '/'),
-        r.field('right', r.rule('expression')),
+        r.field('right', r.expression),
       )),
     ),
 

@@ -27,11 +27,11 @@ export default defineLanguage({
   word: 'identifier',
 
   grammar: {
-    program:        r => r.repeat(r.rule('statement')),
-    statement:      r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
-    variable_decl:  r => r.seq('let', r.field('name', r.rule('identifier')), '=', r.field('value', r.rule('expression')), ';'),
-    expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-    expression:     r => r.choice(r.rule('identifier'), r.rule('number')),
+    program:        r => r.repeat(r.statement),
+    statement:      r => r.choice(r.variable_decl, r.expr_statement),
+    variable_decl:  r => r.seq('let', r.field('name', r.identifier), '=', r.field('value', r.expression), ';'),
+    expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+    expression:     r => r.choice(r.identifier, r.number),
     identifier:     r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
     number:         r => r.token(/[0-9]+/),
   },
@@ -95,7 +95,7 @@ Builder methods match Tree-sitter exactly:
 | `r.prec.left(n, rule)` | `prec.left(n, rule)` |
 | `r.prec.right(n, rule)` | `prec.right(n, rule)` |
 | `r.token(rule)` | `token(rule)` |
-| `r.rule(name)` | `$.rule_name` |
+| `r.name` | `$.name` |
 
 ### Top-Level Options
 
@@ -114,9 +114,9 @@ export default defineLanguage({
   fileExtensions: ['.mylang'],
   entry: 'program',
   word: 'identifier',
-  extras: r => [/\s/, r.rule('comment')],
-  conflicts: r => [[r.rule('expression'), r.rule('type_expression')]],
-  externals: r => [r.rule('indent'), r.rule('dedent'), r.rule('newline')],
+  extras: r => [/\s/, r.comment],
+  conflicts: r => [[r.expression, r.type_expression]],
+  externals: r => [r.indent, r.dedent, r.newline],
 
   grammar: { /* ... */ },
 });
