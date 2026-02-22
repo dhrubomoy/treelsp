@@ -46,6 +46,13 @@ export class LezerDocumentState {
   private fragments: readonly TreeFragment[] = [];
   private disposed = false;
 
+  /**
+   * Byte ranges that changed in the most recent incremental parse.
+   * Computed as the complement of preserved fragment ranges.
+   * Undefined after initial parse or full-text update.
+   */
+  private _changedRanges: import('../document-state.js').ChangedRange[] | undefined;
+
   constructor(
     parser: LRParser,
     metadata: DocumentMetadata,
@@ -80,10 +87,15 @@ export class LezerDocumentState {
     return this.rootNode;
   }
 
+  get changedRanges(): import('../document-state.js').ChangedRange[] | undefined {
+    return this._changedRanges;
+  }
+
   update(newText: string, newVersion?: number): void {
     if (this.disposed) return;
 
     this.sourceText = newText;
+    this._changedRanges = undefined;
 
     if (newVersion !== undefined) {
       this.metadata.version = newVersion;
@@ -125,9 +137,20 @@ export class LezerDocumentState {
         this.sourceText.slice(endOffset);
     }
 
+    // Capture fragments BEFORE addTree() — they represent unchanged regions.
+    // Changed ranges are the complement of these fragments within the document.
+    const preservedFragments = this.fragments;
+
     // Incremental reparse using fragments
     this.tree = this.parser.parse(this.sourceText, this.fragments);
     this.fragments = TreeFragment.addTree(this.tree, this.fragments);
+
+    // Compute changed ranges as complement of preserved fragment ranges
+    this._changedRanges = complementRanges(
+      preservedFragments.map(f => ({ from: f.from, to: f.to })),
+      this.sourceText.length,
+    );
+
     this.rebuildRoot();
   }
 
@@ -162,4 +185,32 @@ export class LezerDocumentState {
     // Lezer trees are garbage collected — no explicit cleanup needed
     this.rootNode = null;
   }
+}
+
+/**
+ * Compute the complement of a set of sorted, non-overlapping ranges within [0, length).
+ * Returns the gaps — the ranges NOT covered by the input.
+ */
+function complementRanges(
+  preserved: Array<{ from: number; to: number }>,
+  length: number,
+): Array<{ startIndex: number; endIndex: number }> {
+  const result: Array<{ startIndex: number; endIndex: number }> = [];
+  let cursor = 0;
+
+  // Sort by start position (fragments should already be sorted, but be safe)
+  const sorted = [...preserved].sort((a, b) => a.from - b.from);
+
+  for (const frag of sorted) {
+    if (frag.from > cursor) {
+      result.push({ startIndex: cursor, endIndex: frag.from });
+    }
+    cursor = Math.max(cursor, frag.to);
+  }
+
+  if (cursor < length) {
+    result.push({ startIndex: cursor, endIndex: length });
+  }
+
+  return result;
 }

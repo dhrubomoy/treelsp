@@ -1159,10 +1159,23 @@ This section tells Claude Code what is settled and what still needs discussion.
 ---
 ## TODO:
 - [ ] Readme should include instruction to install treelsp/cli first before running treelsp init to scaffold project
-- [ ] I tried using treelsp v0.0.4. Scaffolded a project in path `~/git/lsp-projects/treelsp-sql`. Syntax highlighting is not working when I launch vscode extension. variable name, number works. But keyword does not.
+- [x] ~~I tried using treelsp v0.0.4. Scaffolded a project in path `~/git/lsp-projects/treelsp-sql`. Syntax highlighting is not working when I launch vscode extension. variable name, number works. But keyword does not.~~ Fixed — scaffolded extension `package.json` was missing `contributes.grammars`. Added it to `init.ts` template.
+
+## Performance
+
+v1 uses incremental CST parsing (both Tree-sitter and Lezer) but full AST + scope rebuild on every edit. Three optimizations implemented to address the main bottlenecks:
+
+1. **Smart cross-file rescoping** (`workspace.ts`): Tracks a fingerprint of each document's public declarations. Only re-scopes other open files when the public set actually changes. Most edits (typing inside a function body) skip the O(files) rescoping entirely.
+
+2. **Debounced diagnostics** (`server/index.ts`): Scope rebuild + diagnostics are debounced with a 50ms delay. The CST is updated immediately so on-demand LSP requests (hover, completion) get fresh scope via `getDocScope()` on demand.
+
+3. **Changed ranges exposed** (`document-state.ts`): Both backends now expose `changedRanges` after incremental parses — Tree-sitter via `getChangedRanges()`, Lezer via fragment complement. Infrastructure for future optimizations.
+
+Full incremental scope was evaluated and deferred — the complexity (~2000 lines, severe correctness risks) is not justified for typical DSL files where full `buildScopes()` takes ~1-2ms. Revisit only if users report issues with files over 5K lines.
 
 ## Design question:
 - [ ] For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern, which can be error prone? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
+- [ ] Default autocomplete/cross referencing without specifying anything in the grammar definition.
 - [x] ~~Can the grammar api for rule() not take a RuleDefinition instead of string.~~ Done — `r.rule()` removed. Rule references use `r.identifier` (Proxy-based, type-safe with autocomplete).
 ```
 parameter: r => r.field('name', r.identifier)
