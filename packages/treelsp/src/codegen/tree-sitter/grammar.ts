@@ -129,13 +129,6 @@ class GrammarBuilder<T extends string> {
     };
   }
 
-  rule(name: T): RuleNode {
-    return {
-      type: 'rule',
-      name,
-    };
-  }
-
   /**
    * Normalize a RuleDefinition into a RuleNode
    * Handles strings, regexes, functions, and existing nodes
@@ -244,7 +237,7 @@ export function generateGrammar<T extends string>(
   // Build all rules
   const rules: Record<string, RuleNode> = {};
   for (const [name, ruleFn] of Object.entries(definition.grammar)) {
-    rules[name] = (ruleFn as RuleFn<T>)(builder as unknown as RuleBuilder<T>) as unknown as RuleNode;
+    rules[name] = (ruleFn as RuleFn<T>)(builder) as unknown as RuleNode;
   }
 
   // Validate entry rule exists

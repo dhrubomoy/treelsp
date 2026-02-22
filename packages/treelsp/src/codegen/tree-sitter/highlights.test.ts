@@ -14,22 +14,22 @@ function createMiniLangDefinition(): LanguageDefinition<MiniLangRules> {
     word: 'identifier',
 
     grammar: {
-      program: r => r.repeat(r.rule('statement')),
-      statement: r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
+      program: r => r.repeat(r.statement),
+      statement: r => r.choice(r.variable_decl, r.expr_statement),
       variable_decl: r => r.seq(
         'let',
-        r.field('name', r.rule('identifier')),
+        r.field('name', r.identifier),
         '=',
-        r.field('value', r.rule('expression')),
+        r.field('value', r.expression),
         ';',
       ),
-      expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-      expression: r => r.choice(r.rule('binary_expr'), r.rule('identifier'), r.rule('number')),
+      expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+      expression: r => r.choice(r.binary_expr, r.identifier, r.number),
       binary_expr: r => r.choice(
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), r.field('op', '+'), r.field('right', r.rule('expression')))),
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), r.field('op', '-'), r.field('right', r.rule('expression')))),
-        r.prec.left(2, r.seq(r.field('left', r.rule('expression')), r.field('op', '*'), r.field('right', r.rule('expression')))),
-        r.prec.left(2, r.seq(r.field('left', r.rule('expression')), r.field('op', '/'), r.field('right', r.rule('expression')))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), r.field('op', '+'), r.field('right', r.expression))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), r.field('op', '-'), r.field('right', r.expression))),
+        r.prec.left(2, r.seq(r.field('left', r.expression), r.field('op', '*'), r.field('right', r.expression))),
+        r.prec.left(2, r.seq(r.field('left', r.expression), r.field('op', '/'), r.field('right', r.expression))),
       ),
       identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
       number: r => r.token(/[0-9]+/),
@@ -104,8 +104,8 @@ describe('generateHighlights', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('function_decl')),
-        function_decl: r => r.seq('fn', r.field('name', r.rule('identifier')), '(', ')'),
+        program: r => r.repeat(r.function_decl),
+        function_decl: r => r.seq('fn', r.field('name', r.identifier), '(', ')'),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
       semantic: {
@@ -127,8 +127,8 @@ describe('generateHighlights', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('class_decl')),
-        class_decl: r => r.seq('class', r.field('name', r.rule('identifier'))),
+        program: r => r.repeat(r.class_decl),
+        class_decl: r => r.seq('class', r.field('name', r.identifier)),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
       semantic: {
@@ -150,8 +150,8 @@ describe('generateHighlights', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('function_decl')),
-        function_decl: r => r.seq('fn', r.field('name', r.rule('identifier')), '(', ')'),
+        program: r => r.repeat(r.function_decl),
+        function_decl: r => r.seq('fn', r.field('name', r.identifier), '(', ')'),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
     };
@@ -167,8 +167,8 @@ describe('generateHighlights', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('stmt')),
-        stmt: r => r.seq('if', r.rule('identifier')),
+        program: r => r.repeat(r.stmt),
+        stmt: r => r.seq('if', r.identifier),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
     };
@@ -182,7 +182,7 @@ describe('generateHighlights', () => {
       fileExtensions: ['.bare'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.choice(r.rule('identifier'), r.rule('number'))),
+        program: r => r.repeat(r.choice(r.identifier, r.number)),
         identifier: r => r.token(/[a-zA-Z_]+/),
         number: r => r.token(/[0-9]+/),
       },
@@ -199,8 +199,8 @@ describe('generateHighlights', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('variable_decl')),
-        variable_decl: r => r.seq('let', r.field('name', r.rule('identifier'))),
+        program: r => r.repeat(r.variable_decl),
+        variable_decl: r => r.seq('let', r.field('name', r.identifier)),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
       semantic: {
@@ -225,7 +225,7 @@ describe('generateHighlights', () => {
       fileExtensions: ['.test'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.rule('string_literal')),
+        program: r => r.repeat(r.string_literal),
         string_literal: r => r.token(/"[^"]*"/),
       },
     };
@@ -239,7 +239,7 @@ describe('generateHighlights', () => {
       fileExtensions: ['.test'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.rule('comment')),
+        program: r => r.repeat(r.comment),
         comment: r => r.token(/\/\/.*/),
       },
     };

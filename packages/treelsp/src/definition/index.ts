@@ -45,7 +45,7 @@ export interface LanguageDefinition<T extends string = string> {
    *
    * @example
    * ```ts
-   * conflicts: r => [[r.rule('expression'), r.rule('type_expression')]],
+   * conflicts: r => [[r.expression, r.type_expression]],
    * ```
    */
   conflicts?: (r: any) => any[][];
@@ -56,7 +56,7 @@ export interface LanguageDefinition<T extends string = string> {
    *
    * @example
    * ```ts
-   * extras: r => [/\s/, r.rule('comment')],
+   * extras: r => [/\s/, r.comment],
    * ```
    */
   extras?: (r: any) => any[];

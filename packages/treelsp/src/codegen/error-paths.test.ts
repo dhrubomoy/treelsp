@@ -40,7 +40,7 @@ function validDefinition(): LanguageDefinition {
     entry: 'program',
     grammar: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      program: (r: any) => r.repeat(r.rule('identifier')),
+      program: (r: any) => r.repeat(r.identifier),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       identifier: (r: any) => r.token(/[a-z]+/),
     },
@@ -69,7 +69,7 @@ function missingWordDefinition(): LanguageDefinition {
     word: 'typo_identifier',
     grammar: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      program: (r: any) => r.repeat(r.rule('identifier')),
+      program: (r: any) => r.repeat(r.identifier),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       identifier: (r: any) => r.token(/[a-z]+/),
     },
@@ -85,9 +85,9 @@ function nonTokenWordDefinition(): LanguageDefinition {
     word: 'expression',
     grammar: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      program: (r: any) => r.repeat(r.rule('expression')),
+      program: (r: any) => r.repeat(r.expression),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      expression: (r: any) => r.choice(r.rule('identifier')),
+      expression: (r: any) => r.choice(r.identifier),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       identifier: (r: any) => r.token(/[a-z]+/),
     },

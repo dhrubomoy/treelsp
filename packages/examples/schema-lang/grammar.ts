@@ -11,48 +11,48 @@ export default defineLanguage({
   entry: 'schema',
   word: 'identifier',
 
-  extras: r => [/\s+/, r.rule('comment')],
+  extras: r => [/\s+/, r.comment],
 
   grammar: {
     // Schema is a sequence of declarations
-    schema: r => r.repeat(r.rule('declaration')),
+    schema: r => r.repeat(r.declaration),
 
     // Declarations
     declaration: r => r.choice(
-      r.rule('type_decl'),
-      r.rule('enum_decl'),
+      r.type_decl,
+      r.enum_decl,
     ),
 
     // Type declaration: type Name { fields }
     type_decl: r => r.seq(
       'type',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '{',
-      r.repeat(r.rule('field_decl')),
+      r.repeat(r.field_decl),
       '}',
     ),
 
     // Field declaration: name: type_ref
     field_decl: r => r.seq(
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       ':',
-      r.field('type', r.rule('type_ref')),
+      r.field('type', r.type_ref),
     ),
 
     // Enum declaration: enum Name { variants }
     enum_decl: r => r.seq(
       'enum',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '{',
-      r.repeat(r.rule('variant')),
+      r.repeat(r.variant),
       '}',
     ),
 
     // Enum variant: just a name
-    variant: r => r.field('name', r.rule('identifier')),
+    variant: r => r.field('name', r.identifier),
 
     // Type reference — wraps identifier with reference semantics
-    type_ref: r => r.rule('identifier'),
+    type_ref: r => r.identifier,
 
     // Tokens
     identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),

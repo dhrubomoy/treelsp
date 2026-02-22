@@ -20,11 +20,11 @@ export default defineLanguage({
   word: 'identifier',
 
   grammar: {
-    program:        r => r.repeat(r.rule('statement')),
-    statement:      r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
-    variable_decl:  r => r.seq('let', r.field('name', r.rule('identifier')), '=', r.field('value', r.rule('expression')), ';'),
-    expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-    expression:     r => r.choice(r.rule('identifier'), r.rule('number')),
+    program:        r => r.repeat(r.statement),
+    statement:      r => r.choice(r.variable_decl, r.expr_statement),
+    variable_decl:  r => r.seq('let', r.field('name', r.identifier), '=', r.field('value', r.expression), ';'),
+    expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+    expression:     r => r.choice(r.identifier, r.number),
     identifier:     r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
     number:         r => r.token(/[0-9]+/),
   },
@@ -133,22 +133,22 @@ By default, treelsp uses Tree-sitter. To use Lezer, set `"backend": "lezer"` in 
 |---|---|
 | `entry` | Entry rule name (required) |
 | `word` | Keyword extraction rule — prevents keywords matching as identifiers |
-| `extras` | Tokens that can appear anywhere: `extras: r => [/\s+/, r.rule('comment')]` |
+| `extras` | Tokens that can appear anywhere: `extras: r => [/\s+/, r.comment]` |
 | `conflicts` | Explicit GLR conflict declarations |
-| `externals` | External scanner tokens: `externals: r => [r.rule('indent'), r.rule('dedent')]` |
+| `externals` | External scanner tokens: `externals: r => [r.indent, r.dedent]` |
 
 ## The Four Layers
 
 ### Grammar — what the syntax looks like
 
-Builder methods are backend-agnostic (`seq`, `choice`, `repeat`, `field`, `prec.left`, etc.). Forward references use `r.rule('name')` — type-safe, no Proxy magic.
+Builder methods are backend-agnostic (`seq`, `choice`, `repeat`, `field`, `prec.left`, etc.). Rule references use `r.name` — type-safe with autocomplete.
 
 ```typescript
 grammar: {
   binary_expr: r => r.prec.left(3, r.seq(
-    r.field('left', r.rule('expression')),
+    r.field('left', r.expression),
     '+',
-    r.field('right', r.rule('expression')),
+    r.field('right', r.expression),
   )),
 }
 ```

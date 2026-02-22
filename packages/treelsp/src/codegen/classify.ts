@@ -92,10 +92,6 @@ export class RuleNodeBuilder<T extends string> {
     return { type: 'alias', rule: this.normalize(rule), name };
   }
 
-  rule(name: T): RuleNode {
-    return { type: 'rule', name };
-  }
-
   normalize(rule: RuleDefinition<T>): RuleNode {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };

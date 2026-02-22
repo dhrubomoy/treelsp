@@ -51,7 +51,6 @@ class ExternalTokenBuilder<T extends string> {
     { immediate: (rule: RuleDefinition<T>): RuleNode => ({ type: 'token.immediate', rule: this.normalize(rule) }) }
   );
   alias(rule: RuleDefinition<T>, name: string): RuleNode { return { type: 'alias', rule: this.normalize(rule), name }; }
-  rule(name: T): RuleNode { return { type: 'rule', name }; }
   private normalize(rule: RuleDefinition<T>): RuleNode {
     if (typeof rule === 'string') return { type: 'string', value: rule };
     if (rule instanceof RegExp) return { type: 'regex', value: rule };

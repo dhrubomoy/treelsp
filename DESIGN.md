@@ -183,7 +183,7 @@ export default defineLanguage({
   word: 'identifier',         // keyword extraction — prevents keywords matching as identifiers
 
   conflicts: r => [           // explicit GLR conflict declarations
-    [r.rule('expr_statement'), r.rule('variable_decl')],
+    [r.expr_statement, r.variable_decl],
   ],
 
   grammar: { ... },
@@ -201,7 +201,7 @@ export default defineLanguage({
 
 - Rule builder function style: `r => r.seq(...)` — ergonomic, typed, no forward reference problem
 - Method names match Tree-sitter exactly — users who know Tree-sitter are immediately at home
-- `r.rule('name')` instead of `$.name` — same concept, but type-safe (typos are compile errors)
+- `r.name` instead of `$.name` — same concept, type-safe with autocomplete (typos are compile errors)
 - No custom DSL — TypeScript is the grammar format
 
 ### Builder Methods — 1:1 with Tree-sitter
@@ -221,69 +221,69 @@ export default defineLanguage({
 | `r.token(regex)` | `token(regex)` |
 | `r.token.immediate(rule)` | `token.immediate(rule)` |
 | `r.alias(rule, name)` | `alias(rule, name)` |
-| `r.rule(name)` | `$.rule_name` |
+| `r.name` | `$.name` |
 
 ### Example
 
 ```typescript
 grammar: {
 
-  program: r => r.repeat(r.rule('statement')),
+  program: r => r.repeat(r.statement),
 
   statement: r => r.choice(
-    r.rule('variable_decl'),
-    r.rule('function_decl'),
-    r.rule('expr_statement'),
+    r.variable_decl,
+    r.function_decl,
+    r.expr_statement,
   ),
 
   variable_decl: r => r.seq(
     'let',
     r.field('name', r.token('identifier')),
-    r.optional(r.seq(':', r.field('type', r.rule('type_ref')))),
+    r.optional(r.seq(':', r.field('type', r.type_ref))),
     '=',
-    r.field('value', r.rule('expression')),
+    r.field('value', r.expression),
     ';',
   ),
 
   // Expressions — left recursion handled natively by Tree-sitter's GLR parser
   // Precedence numbers resolve ambiguity — higher number wins
   binary_expr: r => r.choice(
-    r.prec.left(1, r.seq(r.field('left', r.rule('expression')), '||',  r.field('right', r.rule('expression')))),
-    r.prec.left(2, r.seq(r.field('left', r.rule('expression')), '&&',  r.field('right', r.rule('expression')))),
-    r.prec.left(3, r.seq(r.field('left', r.rule('expression')), '+',   r.field('right', r.rule('expression')))),
-    r.prec.left(3, r.seq(r.field('left', r.rule('expression')), '-',   r.field('right', r.rule('expression')))),
-    r.prec.left(4, r.seq(r.field('left', r.rule('expression')), '*',   r.field('right', r.rule('expression')))),
-    r.prec.left(4, r.seq(r.field('left', r.rule('expression')), '/',   r.field('right', r.rule('expression')))),
-    r.prec.right(5, r.seq(r.field('left', r.rule('expression')), '**', r.field('right', r.rule('expression')))),
+    r.prec.left(1, r.seq(r.field('left', r.expression), '||',  r.field('right', r.expression))),
+    r.prec.left(2, r.seq(r.field('left', r.expression), '&&',  r.field('right', r.expression))),
+    r.prec.left(3, r.seq(r.field('left', r.expression), '+',   r.field('right', r.expression))),
+    r.prec.left(3, r.seq(r.field('left', r.expression), '-',   r.field('right', r.expression))),
+    r.prec.left(4, r.seq(r.field('left', r.expression), '*',   r.field('right', r.expression))),
+    r.prec.left(4, r.seq(r.field('left', r.expression), '/',   r.field('right', r.expression))),
+    r.prec.right(5, r.seq(r.field('left', r.expression), '**', r.field('right', r.expression))),
   ),
 
   unary_expr: r => r.prec.right(6, r.seq(
     r.field('op', r.choice('!', '-')),
-    r.field('operand', r.rule('expression')),
+    r.field('operand', r.expression),
   )),
 
   call_expr: r => r.prec(7, r.seq(
-    r.field('callee', r.rule('expression')),
+    r.field('callee', r.expression),
     '(',
     r.field('args', r.optional(r.seq(
-      r.rule('expression'),
-      r.repeat(r.seq(',', r.rule('expression'))),
+      r.expression,
+      r.repeat(r.seq(',', r.expression)),
     ))),
     ')',
   )),
 
   expression: r => r.choice(
-    r.rule('binary_expr'),
-    r.rule('unary_expr'),
-    r.rule('call_expr'),
-    r.rule('identifier'),
-    r.rule('literal'),
+    r.binary_expr,
+    r.unary_expr,
+    r.call_expr,
+    r.identifier,
+    r.literal,
   ),
 
   identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
   number:     r => r.token(/[0-9]+(\.[0-9]+)?/),
   string:     r => r.token(/"([^"\\]|\\.)*"/),
-  literal:    r => r.choice(r.rule('number'), r.rule('string')),
+  literal:    r => r.choice(r.number, r.string),
 
 },
 ```
@@ -295,7 +295,7 @@ grammar: {
 ```typescript
 export default defineLanguage({
   name: 'MyLang',
-  extras: r => [/\s+/, r.rule('comment')],
+  extras: r => [/\s+/, r.comment],
   grammar: {
     comment: r => r.token(/\/\/.*/),
     // ...
@@ -304,7 +304,7 @@ export default defineLanguage({
 ```
 
 - Same builder function pattern as `conflicts` — top-level field, returns array
-- Type-safe: `r.rule('comment')` autocompletes from grammar rule names
+- Type-safe: `r.comment` autocompletes from grammar rule names
 - If omitted, Tree-sitter defaults to `[/\s/]` (whitespace only)
 - Maps directly to Tree-sitter's `extras: $ => [...]` in grammar.js
 
@@ -895,11 +895,11 @@ export default defineLanguage({
   word: 'identifier',
 
   grammar: {
-    program:       r => r.repeat(r.rule('statement')),
-    statement:     r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
-    variable_decl: r => r.seq('let', r.field('name', r.token('identifier')), '=', r.field('value', r.rule('expression')), ';'),
-    expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-    expression:    r => r.choice(r.rule('identifier'), r.rule('number')),
+    program:       r => r.repeat(r.statement),
+    statement:     r => r.choice(r.variable_decl, r.expr_statement),
+    variable_decl: r => r.seq('let', r.field('name', r.token('identifier')), '=', r.field('value', r.expression), ';'),
+    expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+    expression:    r => r.choice(r.identifier, r.number),
     identifier:    r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
     number:        r => r.token(/[0-9]+/),
   },
@@ -1076,11 +1076,11 @@ This section tells Claude Code what is settled and what still needs discussion.
 **Grammar layer**
 - Rule builder function style: each rule is `r => r.seq(...)` not a plain object
 - Builder method names match Tree-sitter exactly: `seq`, `choice`, `optional`, `repeat`, `repeat1`, `field`, `prec`, `prec.left`, `prec.right`, `prec.dynamic`, `token`, `alias`
-- `r.rule('name')` instead of `$.name` — same concept, type-safe, no Proxy needed
+- `r.name` instead of `$.name` — same concept, type-safe, no Proxy needed
 - No custom DSL — TypeScript is the grammar format
 - `word`, `conflicts`, `extras`, and `externals` are top-level keys in `defineLanguage`, not inside `grammar`
-- `extras` follows the same builder function pattern as `conflicts`: `extras: r => [/\s+/, r.rule('comment')]`
-- `externals` follows the same pattern: `externals: r => [r.rule('indent'), r.rule('dedent')]` — declares tokens produced by external scanners
+- `extras` follows the same builder function pattern as `conflicts`: `extras: r => [/\s+/, r.comment]`
+- `externals` follows the same pattern: `externals: r => [r.indent, r.dedent]` — declares tokens produced by external scanners
 - Left recursion is handled natively by Tree-sitter's GLR parser — no special abstraction needed
 - Tree-sitter's precedence model is exposed directly — no `r.binary()` helper abstraction
 
@@ -1163,13 +1163,9 @@ This section tells Claude Code what is settled and what still needs discussion.
 
 ## Design question:
 - [ ] For lezer based approach, can we update our api for token() accept just string, so that we don't need a fancy conversion from regex to the lezer based pattern, which can be error prone? Probably need another example "mini-lang-lezer" that creates lezer based grammar. What other api changes can we make to make the lezer conversion easier?
-- [ ] Can the grammar api for rule() not take a RuleDefinition instead of string. That way we get a validation error.
+- [x] ~~Can the grammar api for rule() not take a RuleDefinition instead of string.~~ Done — `r.rule()` removed. Rule references use `r.identifier` (Proxy-based, type-safe with autocomplete).
 ```
-parameter: r => r.field('name', r.rule(identifier))
-```
-Instead of
-```
-parameter: r => r.field('name', r.rule('identifier'))
+parameter: r => r.field('name', r.identifier)
 ```
 
 ## Production Readiness

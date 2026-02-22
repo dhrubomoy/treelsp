@@ -33,7 +33,7 @@ pnpm --filter treelsp build   # build a single package
 ## Decisions Already Made — Do Not Revisit
 - Grammar builder uses r => function style: r.seq(), r.choice(), r.repeat() etc.
 - Builder method names are inspired by Tree-sitter (seq, choice, repeat, prec, field...) but serve as a backend-agnostic grammar API — each backend's codegen maps them appropriately
-- r.rule('name') is used instead of $.name — same concept, type-safe
+- r.name is used instead of $.name — same concept, type-safe with autocomplete via Proxy
 - No custom DSL — TypeScript is the grammar definition format
 - 4 packages: treelsp, @treelsp/cli, @treelsp/vscode, examples
 - Build tool is tsdown — not tsup (tsup is unmaintained)
@@ -41,7 +41,6 @@ pnpm --filter treelsp build   # build a single package
 - TypeScript strict mode + exactOptionalPropertyTypes + noUncheckedIndexedAccess
 - Vitest for testing, ESLint 9 for linting
 - Target: Node.js + Browser (WASM via web-tree-sitter)
-- No $ proxy — forward references solved by r.rule() string references
 
 ## Key External Docs
 - Tree-sitter grammar API: https://tree-sitter.github.io/tree-sitter/creating-parsers

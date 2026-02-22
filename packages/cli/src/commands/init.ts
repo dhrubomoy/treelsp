@@ -321,33 +321,33 @@ export default defineLanguage({
 
   grammar: {
     // Program is a sequence of statements
-    program: r => r.repeat(r.rule('statement')),
+    program: r => r.repeat(r.statement),
 
     // Define your language's statement types
     statement: r => r.choice(
-      r.rule('variable_decl'),
-      r.rule('expr_statement'),
+      r.variable_decl,
+      r.expr_statement,
     ),
 
     // Variable declaration: let name = value;
     variable_decl: r => r.seq(
       'let',
-      r.field('name', r.rule('identifier')),
+      r.field('name', r.identifier),
       '=',
-      r.field('value', r.rule('expression')),
+      r.field('value', r.expression),
       ';',
     ),
 
     // Expression statement: expr;
     expr_statement: r => r.seq(
-      r.field('expr', r.rule('expression')),
+      r.field('expr', r.expression),
       ';',
     ),
 
     // Define your language's expressions
     expression: r => r.choice(
-      r.rule('identifier'),
-      r.rule('number'),
+      r.identifier,
+      r.number,
     ),
 
     // Tokens

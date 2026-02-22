@@ -14,22 +14,22 @@ function createMiniLangDefinition(): LanguageDefinition<MiniLangRules> {
     word: 'identifier',
 
     grammar: {
-      program: r => r.repeat(r.rule('statement')),
-      statement: r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
+      program: r => r.repeat(r.statement),
+      statement: r => r.choice(r.variable_decl, r.expr_statement),
       variable_decl: r => r.seq(
         'let',
-        r.field('name', r.rule('identifier')),
+        r.field('name', r.identifier),
         '=',
-        r.field('value', r.rule('expression')),
+        r.field('value', r.expression),
         ';',
       ),
-      expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-      expression: r => r.choice(r.rule('binary_expr'), r.rule('identifier'), r.rule('number')),
+      expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+      expression: r => r.choice(r.binary_expr, r.identifier, r.number),
       binary_expr: r => r.choice(
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), r.field('op', '+'), r.field('right', r.rule('expression')))),
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), r.field('op', '-'), r.field('right', r.rule('expression')))),
-        r.prec.left(2, r.seq(r.field('left', r.rule('expression')), r.field('op', '*'), r.field('right', r.rule('expression')))),
-        r.prec.left(2, r.seq(r.field('left', r.rule('expression')), r.field('op', '/'), r.field('right', r.rule('expression')))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), r.field('op', '+'), r.field('right', r.expression))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), r.field('op', '-'), r.field('right', r.expression))),
+        r.prec.left(2, r.seq(r.field('left', r.expression), r.field('op', '*'), r.field('right', r.expression))),
+        r.prec.left(2, r.seq(r.field('left', r.expression), r.field('op', '/'), r.field('right', r.expression))),
       ),
       identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
       number: r => r.token(/[0-9]+/),
@@ -72,11 +72,11 @@ describe('generateLocals', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('member_expr')),
+        program: r => r.repeat(r.member_expr),
         member_expr: r => r.seq(
-          r.field('object', r.rule('identifier')),
+          r.field('object', r.identifier),
           '.',
-          r.field('member', r.rule('identifier')),
+          r.field('member', r.identifier),
         ),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
@@ -96,9 +96,9 @@ describe('generateLocals', () => {
       entry: 'program',
       word: 'identifier',
       grammar: {
-        program: r => r.repeat(r.rule('function_decl')),
+        program: r => r.repeat(r.function_decl),
         block: r => r.seq('{', '}'),
-        function_decl: r => r.seq('fn', r.field('name', r.rule('identifier')), r.rule('block')),
+        function_decl: r => r.seq('fn', r.field('name', r.identifier), r.block),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
       semantic: {
@@ -122,7 +122,7 @@ describe('generateLocals', () => {
       fileExtensions: ['.bare'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.rule('identifier')),
+        program: r => r.repeat(r.identifier),
         identifier: r => r.token(/[a-zA-Z_]+/),
       },
     };

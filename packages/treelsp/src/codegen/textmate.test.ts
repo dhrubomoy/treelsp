@@ -15,21 +15,21 @@ function createMiniLangDefinition(): LanguageDefinition<MiniLangRules> {
     word: 'identifier',
 
     grammar: {
-      program: r => r.repeat(r.rule('statement')),
-      statement: r => r.choice(r.rule('variable_decl'), r.rule('expr_statement')),
+      program: r => r.repeat(r.statement),
+      statement: r => r.choice(r.variable_decl, r.expr_statement),
       variable_decl: r => r.seq(
         'let',
-        r.field('name', r.rule('identifier')),
+        r.field('name', r.identifier),
         '=',
-        r.field('value', r.rule('expression')),
+        r.field('value', r.expression),
         ';',
       ),
-      expr_statement: r => r.seq(r.field('expr', r.rule('expression')), ';'),
-      expression: r => r.choice(r.rule('binary_expr'), r.rule('identifier'), r.rule('number'), r.rule('string_literal')),
+      expr_statement: r => r.seq(r.field('expr', r.expression), ';'),
+      expression: r => r.choice(r.binary_expr, r.identifier, r.number, r.string_literal),
       binary_expr: r => r.choice(
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), '+', r.field('right', r.rule('expression')))),
-        r.prec.left(1, r.seq(r.field('left', r.rule('expression')), '-', r.field('right', r.rule('expression')))),
-        r.prec.left(2, r.seq(r.field('left', r.rule('expression')), '*', r.field('right', r.rule('expression')))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), '+', r.field('right', r.expression))),
+        r.prec.left(1, r.seq(r.field('left', r.expression), '-', r.field('right', r.expression))),
+        r.prec.left(2, r.seq(r.field('left', r.expression), '*', r.field('right', r.expression))),
       ),
       identifier: r => r.token(/[a-zA-Z_][a-zA-Z0-9_]*/),
       number: r => r.token(/[0-9]+/),
@@ -114,7 +114,7 @@ describe('generateTextmate', () => {
       fileExtensions: ['.bare'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.choice(r.rule('identifier'), r.rule('number'))),
+        program: r => r.repeat(r.choice(r.identifier, r.number)),
         identifier: r => r.token(/[a-zA-Z_]+/),
         number: r => r.token(/[0-9]+/),
       },
@@ -130,7 +130,7 @@ describe('generateTextmate', () => {
       fileExtensions: ['.hash'],
       entry: 'program',
       grammar: {
-        program: r => r.repeat(r.rule('comment')),
+        program: r => r.repeat(r.comment),
         comment: r => r.token(/#.*/),
       },
     };

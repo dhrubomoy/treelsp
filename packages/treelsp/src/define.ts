@@ -12,8 +12,7 @@ import type { LanguageDefinition } from './definition/index.js';
  * `treelsp build`) to produce a parser and LSP server.
  *
  * The grammar's rule names are inferred as a string union type `T`, enabling:
- * - Type-safe rule references: `r.rule('identifier')` errors on typos
- * - Direct property access: `r.identifier` as shorthand for `r.rule('identifier')`
+ * - Type-safe rule references: `r.identifier` errors on typos
  * - Autocomplete for all rule names on the `r` parameter
  *
  * @param definition.name - Language display name (e.g., `"MiniLang"`)

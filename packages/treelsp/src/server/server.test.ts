@@ -52,7 +52,7 @@ function createTestDefinition(): LanguageDefinition<'program' | 'identifier'> {
     entry: 'program',
     word: 'identifier',
     grammar: {
-      program: r => r.repeat(r.rule('identifier')),
+      program: r => r.repeat(r.identifier),
       identifier: r => r.token(/[a-z]+/),
     },
   };
