@@ -7,7 +7,7 @@
 
 // Abstract interfaces
 export type { ASTNode, Position, SourceProvider } from './ast-node.js';
-export type { DocumentState, DocumentMetadata, TextEdit, ContentChange } from './document-state.js';
+export type { DocumentState, DocumentMetadata, TextEdit, ContentChange, ChangedRange } from './document-state.js';
 export type {
   ParserBackend,
   ParserBackendCodegen,

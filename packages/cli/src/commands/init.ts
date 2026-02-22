@@ -434,6 +434,13 @@ function extensionPackageJson(
           aliases: [capitalizedName],
         },
       ],
+      grammars: [
+        {
+          language: languageId,
+          scopeName: `source.${languageId}`,
+          path: '../language/generated/syntax.tmLanguage.json',
+        },
+      ],
     },
     scripts: {
       build: 'tsdown',

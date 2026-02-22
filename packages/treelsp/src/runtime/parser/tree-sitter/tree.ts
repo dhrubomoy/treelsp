@@ -11,7 +11,7 @@ import { createParser } from './wasm.js';
 import type { DocumentMetadata, ContentChange } from '../document-state.js';
 
 // Re-export interface types for backward compatibility
-export type { DocumentState, DocumentMetadata, TextEdit, ContentChange } from '../document-state.js';
+export type { DocumentState, DocumentMetadata, TextEdit, ContentChange, ChangedRange } from '../document-state.js';
 
 /**
  * Compute the character offset in text for a given Position.
@@ -108,6 +108,13 @@ export class TreeSitterDocumentState {
    */
   private disposed = false;
 
+  /**
+   * Byte ranges that changed in the most recent incremental parse.
+   * Populated by reparse() when an old tree is provided (incremental parse).
+   * Undefined after initial parse or full-text update.
+   */
+  private _changedRanges: import('../document-state.js').ChangedRange[] | undefined;
+
   constructor(
     parser: Parser,
     metadata: DocumentMetadata,
@@ -130,6 +137,18 @@ export class TreeSitterDocumentState {
    */
   private reparse(oldTree?: Parser.Tree): void {
     const newTree = this.parser.parse(this.sourceText, oldTree);
+
+    // Capture changed ranges before deleting the old tree.
+    // getChangedRanges() compares two trees and returns byte ranges that differ.
+    if (oldTree) {
+      const ranges = newTree.getChangedRanges(oldTree);
+      this._changedRanges = ranges.map(r => ({
+        startIndex: r.startIndex,
+        endIndex: r.endIndex,
+      }));
+    } else {
+      this._changedRanges = undefined;
+    }
 
     // Delete old tree to free WASM memory
     if (this.tree) {
@@ -156,6 +175,14 @@ export class TreeSitterDocumentState {
   }
 
   /**
+   * Byte ranges that changed in the most recent incremental parse.
+   * Undefined after initial parse or full-text update.
+   */
+  get changedRanges(): import('../document-state.js').ChangedRange[] | undefined {
+    return this._changedRanges;
+  }
+
+  /**
    * Update document with new text (full replacement, no incremental reuse)
    *
    * Use this when only the final text is known (no change ranges available).
@@ -168,6 +195,7 @@ export class TreeSitterDocumentState {
     if (this.disposed) return;
 
     this.sourceText = newText;
+    this._changedRanges = undefined;
 
     if (newVersion !== undefined) {
       this.metadata.version = newVersion;

@@ -46,6 +46,16 @@ export interface ContentChange {
 }
 
 /**
+ * A byte range in the document that changed after an incremental parse.
+ */
+export interface ChangedRange {
+  /** Start byte offset (inclusive) */
+  startIndex: number;
+  /** End byte offset (exclusive) */
+  endIndex: number;
+}
+
+/**
  * Abstract document state interface
  *
  * Represents a parsed document with incremental update support.
@@ -81,6 +91,13 @@ export interface DocumentState {
 
   /** Whether the document has parse errors. */
   readonly hasErrors: boolean;
+
+  /**
+   * Byte ranges that changed in the most recent incremental parse.
+   * Undefined after initial parse or full-text update.
+   * Enables downstream optimizations (e.g., smart cross-file rescoping).
+   */
+  readonly changedRanges: ChangedRange[] | undefined;
 
   /** Dispose resources (free parser memory). */
   dispose(): void;

@@ -46,6 +46,13 @@ export class Workspace {
    */
   private publicDeclarations = new Map<string, Declaration[]>();
 
+  /**
+   * Fingerprint of each document's public declarations.
+   * Used to skip cross-file rescoping when public declarations haven't changed.
+   * Maps URI → Set of "name|declaredBy|visibility" keys.
+   */
+  private publicDeclFingerprints = new Map<string, Set<string>>();
+
   constructor(semantic: SemanticDefinition) {
     this.semantic = semantic;
   }
@@ -64,14 +71,22 @@ export class Workspace {
       scope,
     });
 
+    // Compute fingerprint of this document's public declarations
+    const newFingerprint = computePublicFingerprint(scope);
+    const oldFingerprint = this.publicDeclFingerprints.get(document.uri);
+    this.publicDeclFingerprints.set(document.uri, newFingerprint);
+
     // Update public declarations index
     this.rebuildPublicIndex();
 
-    // Re-scope other documents so they can resolve cross-file references
-    // against the updated public index. V1: full rebuild is simple and correct.
-    for (const [uri, entry] of this.documents) {
-      if (uri === document.uri) continue;
-      entry.scope = buildScopes(entry.document, this.semantic, this);
+    // Re-scope other documents only if the public declaration set changed.
+    // Most edits (typing inside a function body, editing expressions) don't
+    // change public declarations, so this skips O(files) rescoping ~99% of the time.
+    if (!setsEqual(newFingerprint, oldFingerprint)) {
+      for (const [uri, entry] of this.documents) {
+        if (uri === document.uri) continue;
+        entry.scope = buildScopes(entry.document, this.semantic, this);
+      }
     }
 
     return scope;
@@ -82,6 +97,7 @@ export class Workspace {
    */
   removeDocument(uri: string): void {
     this.documents.delete(uri);
+    this.publicDeclFingerprints.delete(uri);
     this.rebuildPublicIndex();
   }
 
@@ -198,5 +214,31 @@ export class Workspace {
   clear(): void {
     this.documents.clear();
     this.publicDeclarations.clear();
+    this.publicDeclFingerprints.clear();
   }
+}
+
+/**
+ * Compute a fingerprint of a document's public declarations.
+ * Each declaration is represented as "name|declaredBy|visibility".
+ */
+function computePublicFingerprint(scope: DocumentScope): Set<string> {
+  const keys = new Set<string>();
+  const publicDecls = scope.root.allDeclarations({ visibility: 'public' });
+  for (const decl of publicDecls) {
+    keys.add(`${decl.name}|${decl.declaredBy}|${decl.visibility}`);
+  }
+  return keys;
+}
+
+/**
+ * Check if two sets are equal (same size and same elements).
+ */
+function setsEqual(a: Set<string>, b: Set<string> | undefined): boolean {
+  if (!b) return a.size === 0;
+  if (a.size !== b.size) return false;
+  for (const key of a) {
+    if (!b.has(key)) return false;
+  }
+  return true;
 }

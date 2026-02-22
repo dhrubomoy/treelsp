@@ -92,6 +92,13 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Tracks WASM load failure so we don't retry on every keystroke
   let wasmError: string | null = null;
 
+  // Debounce timers for scope rebuild + diagnostics per document.
+  // During rapid typing, intermediate scope rebuilds are wasted work.
+  // The CST is updated immediately so on-demand LSP requests (hover, etc.)
+  // can trigger a fresh scope build via getDocScope() if needed.
+  const scopeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const SCOPE_DEBOUNCE_MS = 50;
+
   async function initDocumentState(
     uri: string,
     version: number,
@@ -252,8 +259,16 @@ export function startStdioServer(options: StdioServerOptions): void {
         state.updateIncremental(changes, version);
       }
 
-      service.documents.change(state);
-      validateDocument(uri, version);
+      // Debounce scope rebuild + diagnostics.
+      // The CST is already updated above, so on-demand LSP requests
+      // (hover, completion, etc.) will get a fresh scope via getDocScope().
+      const existing = scopeTimers.get(uri);
+      if (existing) clearTimeout(existing);
+      scopeTimers.set(uri, setTimeout(() => {
+        scopeTimers.delete(uri);
+        service.documents.change(state);
+        validateDocument(uri, version);
+      }, SCOPE_DEBOUNCE_MS));
     } catch (e) {
       connection.console.error(`[change] error: ${String(e)}`);
     }
@@ -262,6 +277,12 @@ export function startStdioServer(options: StdioServerOptions): void {
   // Document close
   connection.onDidCloseTextDocument((params) => {
     const uri = params.textDocument.uri;
+    // Cancel any pending debounced scope rebuild
+    const pendingTimer = scopeTimers.get(uri);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      scopeTimers.delete(uri);
+    }
     const state = documentStates.get(uri);
     if (state) {
       service.documents.close(uri);
